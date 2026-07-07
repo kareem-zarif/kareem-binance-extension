@@ -1,0 +1,7 @@
+**/bin/
+**/obj/
+**/node_modules/
+extension/dist/
+*.db
+*.db-shm
+*.db-wal

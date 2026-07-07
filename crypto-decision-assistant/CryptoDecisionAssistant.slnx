@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="backend/CryptoDecisionAssistant.Api/CryptoDecisionAssistant.Api.csproj" />
+  <Project Path="backend/CryptoDecisionAssistant.Tests/CryptoDecisionAssistant.Tests.csproj" />
+</Solution>

@@ -1,0 +1,19 @@
+{
+  "name": "crypto-decision-assistant-extension",
+  "private": true,
+  "version": "1.5.0",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "node scripts/generate-assets.mjs && vite build"
+  },
+  "dependencies": {
+    "@microsoft/signalr": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.38",
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
+  }
+}

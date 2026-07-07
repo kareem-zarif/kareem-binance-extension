@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "Crypto Decision Assistant",
+  "description": "Educational BTC and ETH decision support for Binance Spot without automated trading.",
+  "version": "1.5.0",
+  "permissions": ["storage", "notifications", "alarms", "tabs"],
+  "host_permissions": [
+    "http://localhost:5187/*",
+    "https://www.binance.com/en/trade/BTC_USDT*",
+    "https://www.binance.com/en/trade/ETH_USDT*"
+  ],
+  "background": {
+    "service_worker": "crypto-decision-assistant/extension/dist/assets/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "مساعد قرار التداول",
+    "default_icon": {
+      "16": "crypto-decision-assistant/extension/dist/assets/icon.png",
+      "32": "crypto-decision-assistant/extension/dist/assets/icon.png",
+      "48": "crypto-decision-assistant/extension/dist/assets/icon.png",
+      "128": "crypto-decision-assistant/extension/dist/assets/icon.png"
+    }
+  },
+  "options_page": "options.html",
+  "icons": {
+    "16": "crypto-decision-assistant/extension/dist/assets/icon.png",
+    "32": "crypto-decision-assistant/extension/dist/assets/icon.png",
+    "48": "crypto-decision-assistant/extension/dist/assets/icon.png",
+    "128": "crypto-decision-assistant/extension/dist/assets/icon.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.binance.com/en/trade/BTC_USDT*",
+        "https://www.binance.com/en/trade/ETH_USDT*"
+      ],
+      "js": ["crypto-decision-assistant/extension/dist/assets/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["crypto-decision-assistant/extension/dist/assets/alert.wav"],
+      "matches": ["https://www.binance.com/*"]
+    }
+  ]
+}
