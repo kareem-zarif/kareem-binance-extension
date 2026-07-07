@@ -65,10 +65,7 @@ $<HTMLButtonElement>('testNotification').addEventListener('click', async () => {
     : (config.language === 'ar' ? `فشل الإشعار: ${result?.error ?? ''}` : `Notification failed: ${result?.error ?? ''}`);
 });
 
-$<HTMLFormElement>('form').addEventListener('submit', async event => {
-  event.preventDefault();
-  await saveSettings(config.language === 'ar' ? 'تم الحفظ.' : 'Saved.');
-});
+$<HTMLFormElement>('form').addEventListener('submit', event => event.preventDefault());
 
 function readFormSettings(): Settings | undefined {
   const symbols: SymbolCode[] = [];
@@ -106,7 +103,7 @@ async function saveSettings(message: string) {
 
 function renderAlerts() {
   const host = $('alerts');
-  host.innerHTML = config.priceAlerts.map(x => `<div data-id="${x.id}"><span>${x.symbol} ${x.condition === 'above' ? (config.language === 'ar' ? 'أعلى من' : 'above') : (config.language === 'ar' ? 'أقل من' : 'below')} ${formatPrice(x.price)}</span><button type="button">${config.language === 'ar' ? 'حذف' : 'Delete'}</button></div>`).join('');
+  host.innerHTML = config.priceAlerts.map(x => `<div data-id="${x.id}"><span>${x.symbol} ${conditionLabel(x.condition, config.language)} ${formatPrice(x.price)}</span><button type="button">${config.language === 'ar' ? 'حذف' : 'Delete'}</button></div>`).join('');
   host.querySelectorAll<HTMLButtonElement>('button').forEach(button => button.addEventListener('click', async () => {
     config.priceAlerts = config.priceAlerts.filter(x => x.id !== button.parentElement?.dataset.id); renderAlerts();
     await saveSettings(config.language === 'ar' ? 'تم حذف التنبيه وحفظ الإعدادات.' : 'Alert deleted and settings saved.');
@@ -127,9 +124,13 @@ function applyLanguage(language: Settings['language']) {
     } else element.textContent = element.dataset[language] ?? '';
   });
   const condition = $<HTMLSelectElement>('alertCondition');
-  condition.options[0].text = language === 'ar' ? 'أعلى من' : 'Above'; condition.options[1].text = language === 'ar' ? 'أقل من' : 'Below';
+  condition.options[0].text = language === 'ar' ? 'أعلى من' : 'Above'; condition.options[1].text = language === 'ar' ? 'أقل من' : 'Below'; condition.options[2].text = language === 'ar' ? 'يساوي' : 'Equal to';
   $<HTMLInputElement>('alertPrice').placeholder = language === 'ar' ? 'السعر' : 'Price';
   if (config) { config.language = language; renderAlerts(); }
+}
+function conditionLabel(condition: PriceAlert['condition'], language: Settings['language']) {
+  const labels = { above: { ar: 'أعلى من', en: 'above' }, below: { ar: 'أقل من', en: 'below' }, equal: { ar: 'يساوي', en: 'equals' } } as const;
+  return labels[condition][language === 'ar' ? 'ar' : 'en'];
 }
 function formatPrice(value: number) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value); }
 

@@ -113,7 +113,10 @@ async function rangeNotifications(current: SymbolState, previous: SymbolState | 
 async function customPriceAlerts(state: SymbolState, config: Settings) {
   let changed = false;
   for (const alert of config.priceAlerts.filter(x => x.symbol === state.snapshot.symbol && !x.triggered)) {
-    const hit = alert.condition === 'above' ? state.snapshot.currentPrice >= alert.price : state.snapshot.currentPrice <= alert.price;
+    const price = state.snapshot.currentPrice;
+    const hit = alert.condition === 'above' ? price >= alert.price
+      : alert.condition === 'below' ? price <= alert.price
+      : Math.abs(price - alert.price) <= alert.price * 0.0005;
     if (!hit) continue;
     const currentPrice = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(state.snapshot.currentPrice);
     await notify(`price-${alert.id}`, config.language === 'ar' ? `${alert.symbol}: وصل السعر` : `${alert.symbol}: Price alert`, config.language === 'ar' ? `السعر ${currentPrice} حقق التنبيه.` : `Price ${currentPrice} reached your configured level.`, true);
