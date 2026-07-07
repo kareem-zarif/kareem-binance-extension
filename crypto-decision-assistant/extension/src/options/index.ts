@@ -3,6 +3,7 @@ import { defaultSettings, normalizeAnalysisTimeframe, normalizeRefreshSeconds, t
 
 const $ = <T extends HTMLElement>(id: string) => document.querySelector<T>(`#${id}`)!;
 let config: Settings;
+let autoSaveTimer: ReturnType<typeof setTimeout> | undefined;
 
 async function load() {
   const stored = (await chrome.storage.local.get('settings')).settings as (Partial<Settings> & { refreshMinutes?: number }) | undefined;
@@ -32,7 +33,10 @@ async function load() {
   renderAlerts();
 }
 
-$<HTMLSelectElement>('language').addEventListener('change', event => applyLanguage((event.target as HTMLSelectElement).value as Settings['language']));
+$<HTMLSelectElement>('language').addEventListener('change', event => {
+  applyLanguage((event.target as HTMLSelectElement).value as Settings['language']);
+  scheduleAutoSave();
+});
 $<HTMLInputElement>('soundEnabled').addEventListener('change', syncSoundTestButton);
 
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -42,12 +46,16 @@ chrome.storage.onChanged.addListener((changes, area) => {
   renderAlerts();
 });
 
-$<HTMLButtonElement>('addAlert').addEventListener('click', () => {
+$<HTMLFormElement>('form').addEventListener('input', () => scheduleAutoSave());
+$<HTMLFormElement>('form').addEventListener('change', () => scheduleAutoSave());
+
+$<HTMLButtonElement>('addAlert').addEventListener('click', async () => {
   const price = Number($<HTMLInputElement>('alertPrice').value);
   if (!Number.isFinite(price) || price <= 0) return;
   config.priceAlerts.push({ id: crypto.randomUUID(), symbol: $<HTMLSelectElement>('alertSymbol').value as SymbolCode,
     condition: $<HTMLSelectElement>('alertCondition').value as PriceAlert['condition'], price });
   $<HTMLInputElement>('alertPrice').value = ''; renderAlerts();
+  await saveSettings(config.language === 'ar' ? 'تم حفظ التنبيه تلقائيًا.' : 'Alert auto-saved.');
 });
 
 $<HTMLButtonElement>('testNotification').addEventListener('click', async () => {
@@ -59,14 +67,21 @@ $<HTMLButtonElement>('testNotification').addEventListener('click', async () => {
 
 $<HTMLFormElement>('form').addEventListener('submit', async event => {
   event.preventDefault();
+  await saveSettings(config.language === 'ar' ? 'تم الحفظ.' : 'Saved.');
+});
+
+function readFormSettings(): Settings | undefined {
   const symbols: SymbolCode[] = [];
   const heldSymbols: SymbolCode[] = [];
   if ($<HTMLInputElement>('btc').checked) symbols.push('BTCUSDT');
   if ($<HTMLInputElement>('eth').checked) symbols.push('ETHUSDT');
   if ($<HTMLInputElement>('holdBtc').checked) heldSymbols.push('BTCUSDT');
   if ($<HTMLInputElement>('holdEth').checked) heldSymbols.push('ETHUSDT');
-  if (!symbols.length) { $('saved').textContent = config.language === 'ar' ? 'اختر عملة واحدة على الأقل.' : 'Select at least one symbol.'; return; }
-  config = { ...config, apiBaseUrl: $<HTMLInputElement>('apiBaseUrl').value.replace(/\/$/, ''), symbols,
+  if (!symbols.length) {
+    $('saved').textContent = config.language === 'ar' ? 'اختر عملة واحدة على الأقل.' : 'Select at least one symbol.';
+    return undefined;
+  }
+  return { ...config, apiBaseUrl: $<HTMLInputElement>('apiBaseUrl').value.replace(/\/$/, ''), symbols,
     refreshSeconds: normalizeRefreshSeconds($<HTMLInputElement>('refreshSeconds').value), heldSymbols,
     analysisTimeframe: normalizeAnalysisTimeframe($<HTMLSelectElement>('analysisTimeframe').value),
     riskMode: $<HTMLSelectElement>('riskMode').value as Settings['riskMode'],
@@ -74,15 +89,27 @@ $<HTMLFormElement>('form').addEventListener('submit', async event => {
     soundOnlyForStrongSignals: $<HTMLInputElement>('soundOnlyForStrongSignals').checked,
     notificationConfidence: Number($<HTMLInputElement>('notificationConfidence').value),
     language: $<HTMLSelectElement>('language').value as Settings['language'] };
+}
+
+function scheduleAutoSave() {
+  if (autoSaveTimer) clearTimeout(autoSaveTimer);
+  autoSaveTimer = setTimeout(() => void saveSettings(config.language === 'ar' ? 'تم الحفظ تلقائيًا.' : 'Auto-saved.'), 450);
+}
+
+async function saveSettings(message: string) {
+  const next = readFormSettings();
+  if (!next) return;
+  config = next;
   await chrome.storage.local.set({ settings: config });
-  $('saved').textContent = config.language === 'ar' ? 'تم الحفظ.' : 'Saved.'; setTimeout(() => $('saved').textContent = '', 1800);
-});
+  $('saved').textContent = message; setTimeout(() => $('saved').textContent = '', 1800);
+}
 
 function renderAlerts() {
   const host = $('alerts');
   host.innerHTML = config.priceAlerts.map(x => `<div data-id="${x.id}"><span>${x.symbol} ${x.condition === 'above' ? (config.language === 'ar' ? 'أعلى من' : 'above') : (config.language === 'ar' ? 'أقل من' : 'below')} ${formatPrice(x.price)}</span><button type="button">${config.language === 'ar' ? 'حذف' : 'Delete'}</button></div>`).join('');
-  host.querySelectorAll<HTMLButtonElement>('button').forEach(button => button.addEventListener('click', () => {
+  host.querySelectorAll<HTMLButtonElement>('button').forEach(button => button.addEventListener('click', async () => {
     config.priceAlerts = config.priceAlerts.filter(x => x.id !== button.parentElement?.dataset.id); renderAlerts();
+    await saveSettings(config.language === 'ar' ? 'تم حذف التنبيه وحفظ الإعدادات.' : 'Alert deleted and settings saved.');
   }));
 }
 

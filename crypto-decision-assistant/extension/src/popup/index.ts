@@ -83,7 +83,14 @@ function escapeHtml(value: string) { const span = document.createElement('span')
 function compactBreakdown(analysis: SymbolState['analysis'], lang: Language) {
   const b = analysis.scoreBreakdown;
   const title = lang === 'ar' ? 'تفصيل الدرجة' : 'Score breakdown';
-  return `<h3>${title}</h3><p>Technical ${b.technicalScore} · News ${b.newsScore} · Macro ${b.macroScore} · Historical ${b.historicalScore} · Risk ${b.riskScore}</p>`;
+  const items = [
+    ['technical', 'Technical', b.technicalScore],
+    ['news', 'News', b.newsScore],
+    ['macro', 'Macro', b.macroScore],
+    ['historical', 'Historical', b.historicalScore],
+    ['risk', 'Risk', b.riskScore]
+  ];
+  return `<h3>${title}</h3><div class="score-breakdown">${items.map(([kind, label, value]) => `<span class="score-chip ${kind}"><small>${label}</small><b>${value}</b></span>`).join('')}</div>`;
 }
 function compactDirections(analysis: SymbolState['analysis'], lang: Language) {
   if (!analysis.expectedDirections.length) return '';
