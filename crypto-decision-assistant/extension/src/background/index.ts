@@ -1,6 +1,6 @@
 import * as signalR from '@microsoft/signalr';
 import { getComparison, getSymbolState } from '../shared/api';
-import { defaultSettings, signalLabels, type Settings, type Signal, type SymbolCode, type SymbolState } from '../shared/types';
+import { defaultSettings, normalizeAnalysisTimeframe, signalLabels, type Settings, type Signal, type SymbolCode, type SymbolState } from '../shared/types';
 
 const STATE_KEY = 'marketState';
 const SETTINGS_KEY = 'settings';
@@ -12,7 +12,7 @@ const assetPath = (name: string) => nestedRoot ? `crypto-decision-assistant/exte
 async function settings(): Promise<Settings> {
   const stored = (await chrome.storage.local.get(SETTINGS_KEY))[SETTINGS_KEY] as (Partial<Settings> & { refreshMinutes?: number }) | undefined;
   const refreshSeconds = stored?.refreshSeconds ?? Math.max(5, (stored?.refreshMinutes ?? 0.25) * 60);
-  return { ...defaultSettings, ...stored, refreshSeconds: Math.max(5, Math.min(300, refreshSeconds)), heldSymbols: stored?.heldSymbols ?? [] };
+  return { ...defaultSettings, ...stored, refreshSeconds: Math.max(5, Math.min(300, refreshSeconds)), heldSymbols: stored?.heldSymbols ?? [], analysisTimeframe: normalizeAnalysisTimeframe(stored?.analysisTimeframe) };
 }
 
 function scheduleRefresh(config: Settings) {
@@ -48,7 +48,7 @@ async function refreshAll() {
   const next = { ...previous };
   await Promise.all(config.symbols.map(async symbol => {
     try {
-      const state = await getSymbolState(config.apiBaseUrl, symbol, config.heldSymbols.includes(symbol));
+      const state = await getSymbolState(config.apiBaseUrl, symbol, config.heldSymbols.includes(symbol), config.analysisTimeframe);
       next[symbol] = state;
       const oldSignal = previous[symbol]?.analysis.signal;
       if (oldSignal && oldSignal !== state.analysis.signal) await signalNotification(symbol, oldSignal, state.analysis.signal, state.analysis.confidence, config);
@@ -143,7 +143,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       sendResponse({ state: stored[STATE_KEY] ?? {}, settings: config })); return true;
   }
   if (message.type === 'COMPARE') {
-    settings().then(x => getComparison(x.apiBaseUrl)).then(sendResponse).catch(error => sendResponse({ error: String(error) })); return true;
+    settings().then(x => getComparison(x.apiBaseUrl, x.analysisTimeframe)).then(sendResponse).catch(error => sendResponse({ error: String(error) })); return true;
   }
   if (message.type === 'ORDER_FILLED_VISIBLE') {
     settings().then(config => notify(`filled-${message.symbol}-${Date.now()}`,

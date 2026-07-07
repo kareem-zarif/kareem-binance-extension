@@ -95,7 +95,7 @@ public sealed class SignalChangeWorker(
                 {
                     await using var scope = scopeFactory.CreateAsyncScope();
                     var analysis = scope.ServiceProvider.GetRequiredService<IAnalysisService>();
-                    var current = await analysis.GetSignalAsync(symbol, false, stoppingToken);
+                    var current = await analysis.GetSignalAsync(symbol, false, AnalysisTimeframes.Default, stoppingToken);
                     if (_previous.TryGetValue(symbol, out var previous) && previous != current.Signal)
                         await hub.Clients.Group(symbol).SendAsync("signalChanged",
                             new SignalChangedMessage(symbol, previous, current.Signal, current.Confidence), stoppingToken);

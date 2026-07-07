@@ -1,5 +1,11 @@
 export type SymbolCode = 'BTCUSDT' | 'ETHUSDT';
 export type Signal = 'MARKET_NOW' | 'LIMIT_ONLY' | 'WAIT' | 'AVOID' | 'TAKE_PROFIT_WATCH';
+export const analysisTimeframes = ['1H', '4H', '1D', '1W', '1M'] as const;
+export type AnalysisTimeframe = typeof analysisTimeframes[number];
+
+export function normalizeAnalysisTimeframe(value: unknown): AnalysisTimeframe {
+  return analysisTimeframes.includes(value as AnalysisTimeframe) ? value as AnalysisTimeframe : '4H';
+}
 
 export interface MarketSnapshot {
   symbol: SymbolCode; currentPrice: number; change24hPercent: number; volume24h: number;
@@ -13,6 +19,7 @@ export interface MarketSnapshot {
 export interface SignalResult {
   symbol: SymbolCode; signal: Signal; confidence: number; riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
   suggestedOrderType: 'MARKET' | 'LIMIT' | 'NO_ACTION'; suggestedLimitZoneTextArabic: string;
+  analysisTimeframe: string; currentPrice: number; ema20: number; ema50: number;
   reasonsArabic: string[]; warningsArabic: string[]; priceContextArabic: string;
   newsContextArabic: string; technicalContextArabic: string; btcVsEthComparisonArabic?: string;
 }
@@ -28,6 +35,7 @@ export interface SymbolState { snapshot: MarketSnapshot; analysis: SignalResult;
 export interface PriceAlert { id: string; symbol: SymbolCode; condition: 'above' | 'below'; price: number; triggered?: boolean; }
 export interface Settings {
   apiBaseUrl: string; symbols: SymbolCode[]; refreshSeconds: number; heldSymbols: SymbolCode[];
+  analysisTimeframe: AnalysisTimeframe;
   riskMode: 'Conservative' | 'Balanced' | 'Aggressive'; soundEnabled: boolean;
   soundOnlyForStrongSignals: boolean; notificationConfidence: number; priceAlerts: PriceAlert[];
   language: 'en' | 'ar';
@@ -35,6 +43,7 @@ export interface Settings {
 
 export const defaultSettings: Settings = {
   apiBaseUrl: 'http://localhost:5187', symbols: ['BTCUSDT', 'ETHUSDT'], refreshSeconds: 15, heldSymbols: [],
+  analysisTimeframe: '4H',
   riskMode: 'Balanced', soundEnabled: true, soundOnlyForStrongSignals: true,
   notificationConfidence: 70, priceAlerts: [], language: 'en'
 };

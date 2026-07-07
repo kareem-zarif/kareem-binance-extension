@@ -1,35 +1,40 @@
+using CryptoDecisionAssistant.Api.Infrastructure;
 using CryptoDecisionAssistant.Api.Models;
 
 namespace CryptoDecisionAssistant.Api.Services;
 
 public interface ITechnicalAnalysisService
 {
-    Task<TechnicalIndicatorDto> AnalyzeAsync(string symbol, CancellationToken cancellationToken);
+    Task<TechnicalIndicatorDto> AnalyzeAsync(string symbol, string timeframe, CancellationToken cancellationToken);
 }
 
 public sealed class TechnicalAnalysisService(IMarketDataClient market) : ITechnicalAnalysisService
 {
-    public async Task<TechnicalIndicatorDto> AnalyzeAsync(string symbol, CancellationToken cancellationToken)
+    public async Task<TechnicalIndicatorDto> AnalyzeAsync(string symbol, string timeframe, CancellationToken cancellationToken)
     {
+        timeframe = AnalysisTimeframes.NormalizeAndValidate(timeframe);
+        var analysisInterval = AnalysisTimeframes.ToBinanceInterval(timeframe);
         var h1Task = market.GetKlinesAsync(symbol, "1h", 250, cancellationToken);
-        var h4Task = market.GetKlinesAsync(symbol, "4h", 250, cancellationToken);
-        await Task.WhenAll(h1Task, h4Task);
+        var analysisTask = analysisInterval == "1h"
+            ? h1Task
+            : market.GetKlinesAsync(symbol, analysisInterval, 250, cancellationToken);
+        await Task.WhenAll(h1Task, analysisTask);
         var h1 = (await h1Task).ToArray();
-        var h4 = (await h4Task).ToArray();
-        var closes = h4.Select(x => x.Close).ToArray();
+        var analysisCandles = (await analysisTask).ToArray();
+        var closes = analysisCandles.Select(x => x.Close).ToArray();
         var ema20 = CalculateEma(closes, 20);
         var ema50 = CalculateEma(closes, 50);
-        var ema200 = CalculateEma(closes, 200);
-        var latest = h4[^1];
-        var averageVolume = h4.TakeLast(21).SkipLast(1).Average(x => x.Volume);
+        decimal? ema200 = closes.Length >= 200 ? CalculateEma(closes, 200) : null;
+        var latest = analysisCandles[^1];
+        var averageVolume = analysisCandles.TakeLast(21).SkipLast(1).Average(x => x.Volume);
         var volumeRatio = averageVolume == 0 ? 0 : latest.Volume / averageVolume;
-        var recent = h4.TakeLast(30).ToArray();
+        var recent = analysisCandles.TakeLast(30).ToArray();
         var trend = ema20 > ema50 && latest.Close > ema50 ? "UPTREND"
             : ema20 < ema50 && latest.Close < ema50 ? "DOWNTREND" : "SIDEWAYS";
 
         return new TechnicalIndicatorDto(
             CalculateRsi(h1.Select(x => x.Close), 14), CalculateRsi(closes, 14),
-            ema20, ema50, ema200, CalculateAtr(h4, 14), Math.Round(volumeRatio, 2), trend,
+            timeframe, ema20, ema50, ema200, CalculateAtr(analysisCandles, 14), Math.Round(volumeRatio, 2), trend,
             recent.Min(x => x.Low), recent.Max(x => x.High),
             latest.Close < latest.Open && volumeRatio >= 1.5m && (latest.Open - latest.Close) / latest.Open >= .02m);
     }

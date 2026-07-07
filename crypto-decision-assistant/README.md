@@ -28,9 +28,9 @@ The development profile listens at `http://localhost:5187`. On first start, EF C
 Available API routes:
 
 - `GET /api/market/snapshot?symbol=BTCUSDT`
-- `GET /api/analysis/signal?symbol=BTCUSDT`
+- `GET /api/analysis/signal?symbol=BTCUSDT&timeframe=4H`
 - `GET /api/analysis/signal?symbol=BTCUSDT&holdsAsset=true` enables the optional take-profit watch check
-- `GET /api/analysis/compare`
+- `GET /api/analysis/compare?timeframe=4H`
 - `GET /api/news/sentiment?symbol=BTCUSDT`
 - `GET|POST|DELETE /api/alerts`
 - SignalR hub: `/hubs/market`
@@ -91,7 +91,7 @@ It is draggable, collapsible, dark-mode compatible, and deliberately does not in
 
 English is the default interface language. Use the **العربية** button in the popup or the Language setting to switch the popup, overlay, settings, and notifications to Arabic.
 
-The refresh setting is in seconds (5–300). An active Binance tab requests analysis at that interval; SignalR uses long polling for service-worker reliability and polling remains a fallback. Mark BTC or ETH under **Assets I currently hold** to enable the conditional take-profit/sell-watch signal.
+The refresh setting is in seconds (5–300). The analysis timeframe is selectable in Settings as `1H`, `4H`, `1D`, `1W`, or `1M`; EMA, ATR, trend, volume, support, and resistance use the selected Binance candle interval. An active Binance tab requests analysis at the configured refresh interval; SignalR uses long polling for service-worker reliability and polling remains a fallback. Mark BTC or ETH under **Assets I currently hold** to enable the conditional take-profit/sell-watch signal.
 
 Each card includes today's UTC low/high, 7-day, 30-day, 365-day, and complete Binance listing-history low/high. Complete history is loaded through paged public daily candles and cached for 12 hours. Today's candle is cached for only two seconds, while SignalR price updates immediately extend the displayed daily high or low whenever the live price breaks either boundary.
 

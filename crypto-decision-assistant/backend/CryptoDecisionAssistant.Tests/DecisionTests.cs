@@ -1,10 +1,27 @@
 using CryptoDecisionAssistant.Api.Models;
 using CryptoDecisionAssistant.Api.Services;
+using CryptoDecisionAssistant.Api.Infrastructure;
 
 namespace CryptoDecisionAssistant.Tests;
 
 public sealed class DecisionTests
 {
+    [Theory]
+    [InlineData("1h", "1H", "1h")]
+    [InlineData("4H", "4H", "4h")]
+    [InlineData("1d", "1D", "1d")]
+    [InlineData("1w", "1W", "1w")]
+    [InlineData("1m", "1M", "1M")]
+    public void TimeframeMapping_UsesSupportedBinanceIntervals(string input, string expected, string interval)
+    {
+        Assert.Equal(expected, AnalysisTimeframes.NormalizeAndValidate(input));
+        Assert.Equal(interval, AnalysisTimeframes.ToBinanceInterval(input));
+    }
+
+    [Fact]
+    public void TimeframeMapping_RejectsUnsupportedValues() =>
+        Assert.Throws<ArgumentException>(() => AnalysisTimeframes.NormalizeAndValidate("15M"));
+
     [Theory]
     [InlineData(75, RiskLevel.LOW, DecisionSignal.MARKET_NOW)]
     [InlineData(80, RiskLevel.HIGH, DecisionSignal.LIMIT_ONLY)]

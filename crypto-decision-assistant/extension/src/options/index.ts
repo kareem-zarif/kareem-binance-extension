@@ -1,12 +1,12 @@
 import './options.css';
-import { defaultSettings, type PriceAlert, type Settings, type SymbolCode } from '../shared/types';
+import { defaultSettings, normalizeAnalysisTimeframe, type PriceAlert, type Settings, type SymbolCode } from '../shared/types';
 
 const $ = <T extends HTMLElement>(id: string) => document.querySelector<T>(`#${id}`)!;
 let config: Settings;
 
 async function load() {
   const stored = (await chrome.storage.local.get('settings')).settings as (Partial<Settings> & { refreshMinutes?: number }) | undefined;
-  config = { ...defaultSettings, ...stored, refreshSeconds: stored?.refreshSeconds ?? Math.max(5, (stored?.refreshMinutes ?? 0.25) * 60), heldSymbols: stored?.heldSymbols ?? [] };
+  config = { ...defaultSettings, ...stored, refreshSeconds: stored?.refreshSeconds ?? Math.max(5, (stored?.refreshMinutes ?? 0.25) * 60), heldSymbols: stored?.heldSymbols ?? [], analysisTimeframe: normalizeAnalysisTimeframe(stored?.analysisTimeframe) };
   $<HTMLSelectElement>('language').value = config.language;
   applyLanguage(config.language);
   $<HTMLInputElement>('apiBaseUrl').value = config.apiBaseUrl;
@@ -15,6 +15,7 @@ async function load() {
   $<HTMLInputElement>('holdBtc').checked = config.heldSymbols.includes('BTCUSDT');
   $<HTMLInputElement>('holdEth').checked = config.heldSymbols.includes('ETHUSDT');
   $<HTMLInputElement>('refreshSeconds').value = String(config.refreshSeconds);
+  $<HTMLSelectElement>('analysisTimeframe').value = config.analysisTimeframe;
   $<HTMLSelectElement>('riskMode').value = config.riskMode;
   $<HTMLInputElement>('soundEnabled').checked = config.soundEnabled;
   $<HTMLInputElement>('soundOnlyForStrongSignals').checked = config.soundOnlyForStrongSignals;
@@ -50,6 +51,7 @@ $<HTMLFormElement>('form').addEventListener('submit', async event => {
   if (!symbols.length) { $('saved').textContent = config.language === 'ar' ? 'اختر عملة واحدة على الأقل.' : 'Select at least one symbol.'; return; }
   config = { ...config, apiBaseUrl: $<HTMLInputElement>('apiBaseUrl').value.replace(/\/$/, ''), symbols,
     refreshSeconds: Math.max(5, Math.min(300, Number($<HTMLInputElement>('refreshSeconds').value))), heldSymbols,
+    analysisTimeframe: normalizeAnalysisTimeframe($<HTMLSelectElement>('analysisTimeframe').value),
     riskMode: $<HTMLSelectElement>('riskMode').value as Settings['riskMode'],
     soundEnabled: $<HTMLInputElement>('soundEnabled').checked,
     soundOnlyForStrongSignals: $<HTMLInputElement>('soundOnlyForStrongSignals').checked,

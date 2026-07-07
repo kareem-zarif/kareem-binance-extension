@@ -1,4 +1,4 @@
-import { incompleteWarningArabic, type Comparison, type MarketSnapshot, type NewsSentiment, type Signal, type SignalResult, type SymbolCode } from './types';
+import { incompleteWarningArabic, type AnalysisTimeframe, type Comparison, type MarketSnapshot, type NewsSentiment, type Signal, type SignalResult, type SymbolCode } from './types';
 
 async function get<T>(baseUrl: string, path: string): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`);
@@ -6,16 +6,17 @@ async function get<T>(baseUrl: string, path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function getSymbolState(baseUrl: string, symbol: SymbolCode, holdsAsset = false) {
+export async function getSymbolState(baseUrl: string, symbol: SymbolCode, holdsAsset = false, timeframe: AnalysisTimeframe = '4H') {
   const [snapshotRaw, analysisRaw, newsRaw] = await Promise.all([
     get<Record<string, unknown>>(baseUrl, `/api/market/snapshot?symbol=${symbol}`),
-    get<Record<string, unknown>>(baseUrl, `/api/analysis/signal?symbol=${symbol}&holdsAsset=${holdsAsset}`),
+    get<Record<string, unknown>>(baseUrl, `/api/analysis/signal?symbol=${symbol}&holdsAsset=${holdsAsset}&timeframe=${timeframe}`),
     get<Record<string, unknown>>(baseUrl, `/api/news/sentiment?symbol=${symbol}`)
   ]);
   return { snapshot: normalizeSnapshot(snapshotRaw, symbol), analysis: normalizeAnalysis(analysisRaw, symbol), news: normalizeNews(newsRaw, symbol) };
 }
 
-export const getComparison = (baseUrl: string) => get<Comparison>(baseUrl, '/api/analysis/compare');
+export const getComparison = (baseUrl: string, timeframe: AnalysisTimeframe = '4H') =>
+  get<Comparison>(baseUrl, `/api/analysis/compare?timeframe=${timeframe}`);
 
 const pick = (raw: Record<string, unknown>, camel: string, pascal: string) => raw[camel] ?? raw[pascal];
 const number = (value: unknown, fallback = 0) => {
@@ -69,6 +70,10 @@ function normalizeAnalysis(raw: Record<string, unknown>, fallbackSymbol: SymbolC
     symbol: text(pick(raw, 'symbol', 'Symbol'), fallbackSymbol) as SymbolCode,
     signal, confidence: Math.max(0, Math.min(100, confidence)), riskLevel: incomplete ? 'HIGH' : risk,
     suggestedOrderType: order,
+    analysisTimeframe: text(pick(raw, 'analysisTimeframe', 'AnalysisTimeframe')),
+    currentPrice: number(pick(raw, 'currentPrice', 'CurrentPrice')),
+    ema20: number(pick(raw, 'ema20', 'Ema20')),
+    ema50: number(pick(raw, 'ema50', 'Ema50')),
     suggestedLimitZoneTextArabic: text(pick(raw, 'suggestedLimitZoneTextArabic', 'SuggestedLimitZoneTextArabic')),
     reasonsArabic: strings(pick(raw, 'reasonsArabic', 'ReasonsArabic')),
     warningsArabic: warnings,

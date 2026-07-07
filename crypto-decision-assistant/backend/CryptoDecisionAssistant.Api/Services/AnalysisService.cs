@@ -5,8 +5,8 @@ namespace CryptoDecisionAssistant.Api.Services;
 
 public interface IAnalysisService
 {
-    Task<SignalDto> GetSignalAsync(string symbol, bool holdsAsset, CancellationToken cancellationToken);
-    Task<ComparisonDto> CompareAsync(CancellationToken cancellationToken);
+    Task<SignalDto> GetSignalAsync(string symbol, bool holdsAsset, string timeframe, CancellationToken cancellationToken);
+    Task<ComparisonDto> CompareAsync(string timeframe, CancellationToken cancellationToken);
 }
 
 public sealed class AnalysisService(
@@ -16,11 +16,12 @@ public sealed class AnalysisService(
 {
     private const string Disclaimer = "الدخول ماركت مخاطرة أعلى من Limit. الإشارة للتعليم والمساعدة وليست توصية مالية مؤكدة.";
 
-    public async Task<SignalDto> GetSignalAsync(string symbol, bool holdsAsset, CancellationToken cancellationToken)
+    public async Task<SignalDto> GetSignalAsync(string symbol, bool holdsAsset, string timeframe, CancellationToken cancellationToken)
     {
         symbol = Symbols.NormalizeAndValidate(symbol);
-        var currentTask = EvaluateAsync(symbol, holdsAsset, cancellationToken);
-        var otherTask = EvaluateAsync(symbol == "BTCUSDT" ? "ETHUSDT" : "BTCUSDT", false, cancellationToken);
+        timeframe = AnalysisTimeframes.NormalizeAndValidate(timeframe);
+        var currentTask = EvaluateAsync(symbol, holdsAsset, timeframe, cancellationToken);
+        var otherTask = EvaluateAsync(symbol == "BTCUSDT" ? "ETHUSDT" : "BTCUSDT", false, timeframe, cancellationToken);
         await Task.WhenAll(currentTask, otherTask);
         var current = await currentTask;
         var other = await otherTask;
@@ -32,10 +33,11 @@ public sealed class AnalysisService(
         return ToDto(current, comparison);
     }
 
-    public async Task<ComparisonDto> CompareAsync(CancellationToken cancellationToken)
+    public async Task<ComparisonDto> CompareAsync(string timeframe, CancellationToken cancellationToken)
     {
-        var btcTask = EvaluateAsync("BTCUSDT", false, cancellationToken);
-        var ethTask = EvaluateAsync("ETHUSDT", false, cancellationToken);
+        timeframe = AnalysisTimeframes.NormalizeAndValidate(timeframe);
+        var btcTask = EvaluateAsync("BTCUSDT", false, timeframe, cancellationToken);
+        var ethTask = EvaluateAsync("ETHUSDT", false, timeframe, cancellationToken);
         await Task.WhenAll(btcTask, ethTask);
         return Compare(await btcTask, await ethTask);
     }
@@ -85,10 +87,10 @@ public sealed class AnalysisService(
         return signal;
     }
 
-    private async Task<Evaluation> EvaluateAsync(string symbol, bool holdsAsset, CancellationToken cancellationToken)
+    private async Task<Evaluation> EvaluateAsync(string symbol, bool holdsAsset, string timeframe, CancellationToken cancellationToken)
     {
         var snapshotTask = snapshots.GetAsync(symbol, cancellationToken);
-        var technicalTask = technical.AnalyzeAsync(symbol, cancellationToken);
+        var technicalTask = technical.AnalyzeAsync(symbol, timeframe, cancellationToken);
         var newsTask = news.AnalyzeAsync(symbol, cancellationToken);
         await Task.WhenAll(snapshotTask, technicalTask, newsTask);
         var snapshot = await snapshotTask;
@@ -98,7 +100,7 @@ public sealed class AnalysisService(
         var reasons = new List<string>();
         var warnings = new List<string> { Disclaimer };
 
-        if ((snapshot.DistanceFromWeekLowPercent <= 5 || snapshot.DistanceFromMonthLowPercent <= 7) && indicators.Rsi4h >= 30)
+        if ((snapshot.DistanceFromWeekLowPercent <= 5 || snapshot.DistanceFromMonthLowPercent <= 7) && indicators.RsiAnalysis >= 30)
         { score += 10; reasons.Add("السعر قريب من قاع أسبوعي أو شهري وRSI لا يظهر انهيارًا حاليًا."); }
         if (indicators.Rsi1h is >= 35 and <= 50)
         { score += 8; reasons.Add("RSI على الساعة في منطقة مناسبة للمراقبة بعد تراجع."); }
@@ -113,7 +115,7 @@ public sealed class AnalysisService(
         { score -= 20; warnings.Add("السعر قريب جدًا من أعلى السنة؛ مطاردة السعر مخاطرتها مرتفعة."); }
         else if (snapshot.DistanceFromWeekHighPercent <= 3 || snapshot.DistanceFromMonthHighPercent <= 5)
         { score -= 10; warnings.Add("السعر قريب من قمة أسبوعية أو شهرية."); }
-        if (indicators.Rsi1h > 70 || indicators.Rsi4h > 70)
+        if (indicators.Rsi1h > 70 || indicators.RsiAnalysis > 70)
         { score -= 15; warnings.Add("RSI أعلى من 70 وقد يكون السعر في تشبع شرائي."); }
         if (snapshot.CurrentPrice < indicators.Ema50 && indicators.Ema20 < indicators.Ema50)
         { score -= 10; warnings.Add("السعر تحت EMA50 والترند ضعيف."); }
@@ -127,7 +129,7 @@ public sealed class AnalysisService(
 
         score = Math.Clamp(score, 0, 100);
         var risk = EstimateRiskLevel(score, atrPercent);
-        var highRsi = indicators.Rsi1h > 70 || indicators.Rsi4h > 70;
+        var highRsi = indicators.Rsi1h > 70 || indicators.RsiAnalysis > 70;
         var takeProfit = holdsAsset && (snapshot.DistanceFromMonthHighPercent <= 3 || snapshot.DistanceFromYearHighPercent <= 3) && highRsi;
         var strongTrendAndVolume = indicators.Trend == "UPTREND" && indicators.VolumeRatio >= 1.5m
             && snapshot.Change24hPercent > 0 && snapshot.CurrentPrice > indicators.Ema20;
@@ -157,6 +159,7 @@ public sealed class AnalysisService(
             ? "السعر تحت EMA50 والترند ضعيف، الأفضل الانتظار."
             : $"الاتجاه الحالي {TrendArabic(x.Indicators.Trend)}، وRSI الساعة {x.Indicators.Rsi1h:0.##}.";
         return new SignalDto(x.Symbol, x.Signal, x.Score, x.Risk, order,
+            x.Indicators.Timeframe, x.Snapshot.CurrentPrice, x.Indicators.Ema20, x.Indicators.Ema50,
             order == SuggestedOrderType.LIMIT ? $"منطقة متابعة تقريبية بين {low:N2} و{high:N2} قرب الدعم، وليست أمر شراء." : "لا توجد منطقة Limit مقترحة مع الإشارة الحالية.",
             x.Reasons.Count > 0 ? x.Reasons : ["لا توجد أفضلية فنية قوية وواضحة الآن."], x.Warnings,
             priceContext, $"مزاج الأخبار: {x.Sentiment.LabelArabic} (النتيجة {x.Sentiment.Score}).", technicalContext, comparison);

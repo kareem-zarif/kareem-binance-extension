@@ -56,13 +56,14 @@ function card(state: SymbolState, lang: Language) {
   const s = state.snapshot, a = state.analysis;
   const id = `reasons-${s.symbol}`;
   const labels = lang === 'ar'
-    ? { confidence: 'الثقة', risk: 'المخاطرة', day: 'اليوم UTC', week: 'الأسبوع', month: 'الشهر', year: 'السنة', all: 'منذ الإدراج', min: 'أقل', max: 'أعلى', why: 'ليه؟', updated: 'آخر تحديث' }
-    : { confidence: 'Decision score', risk: 'Risk', day: 'Today UTC', week: 'Week', month: 'Month', year: 'Year', all: 'Since listing', min: 'Min', max: 'Max', why: 'Why?', updated: 'Last updated' };
+    ? { confidence: 'الثقة', risk: 'المخاطرة', timeframe: 'الإطار الزمني', currentPrice: 'السعر الحالي', day: 'اليوم UTC', week: 'الأسبوع', month: 'الشهر', year: 'السنة', all: 'منذ الإدراج', min: 'أقل', max: 'أعلى', why: 'ليه؟', updated: 'آخر تحديث' }
+    : { confidence: 'Decision score', risk: 'Risk', timeframe: 'Timeframe', currentPrice: 'Current price', day: 'Today UTC', week: 'Week', month: 'Month', year: 'Year', all: 'Since listing', min: 'Min', max: 'Max', why: 'Why?', updated: 'Last updated' };
   const contexts = contextsFor(state, lang);
   return `<article><div class="card-head"><h2>${s.symbol.replace('USDT', '/USDT')}</h2><b><bdi id="${s.symbol}-price">${money(s.currentPrice)}</bdi></b></div>
     <span class="badge ${a.signal}">${signalLabels[lang][a.signal]}</span>
     <p class="decision"><b>${escapeHtml(decisionGuidance(state, lang))}</b></p>
     <div class="metrics"><span>${labels.confidence} <b>${a.confidence}%</b></span><span>${labels.risk} <b>${riskLabels[lang][a.riskLevel]}</b></span></div>
+    <div class="technical-metrics"><span>${labels.timeframe} <b>${escapeHtml(a.analysisTimeframe || '—')}</b></span><span>${labels.currentPrice} <bdi id="${s.symbol}-technical-price">${money(s.currentPrice)}</bdi></span><span>EMA20 <bdi>${money(a.ema20)}</bdi></span><span>EMA50 <bdi>${money(a.ema50)}</bdi></span></div>
     <div class="ranges"><span>${labels.day}: ${labels.min} <bdi id="${s.symbol}-day-low">${money(s.dayLow)}</bdi> · ${labels.max} <bdi id="${s.symbol}-day-high">${money(s.dayHigh)}</bdi></span><span>${labels.week}: ${labels.min} <bdi>${money(s.weekLow)}</bdi> · ${labels.max} <bdi>${money(s.weekHigh)}</bdi></span><span>${labels.month}: ${labels.min} <bdi>${money(s.monthLow)}</bdi> · ${labels.max} <bdi>${money(s.monthHigh)}</bdi></span><span>${labels.year}: ${labels.min} <bdi>${money(s.yearLow)}</bdi> · ${labels.max} <bdi>${money(s.yearHigh)}</bdi></span><span>${labels.all}: ${labels.min} <bdi>${money(s.allTimeLow)}</bdi> · ${labels.max} <bdi>${money(s.allTimeHigh)}</bdi></span></div>
     <small>${labels.updated}: ${updated(s.lastUpdatedUtc, lang)}</small>
     <button data-reasons="${id}">${labels.why}</button><div id="${id}" hidden><ul>${reasonsFor(a, lang).map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul><p>${escapeHtml(contexts[0])}</p>
@@ -72,6 +73,7 @@ function card(state: SymbolState, lang: Language) {
 function money(value: number) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value) || 0); }
 function updateLiveCard(symbol: SymbolCode, snapshot: SymbolState['snapshot']) {
   const price = document.querySelector(`#${symbol}-price`); if (price) price.textContent = money(snapshot.currentPrice);
+  const technicalPrice = document.querySelector(`#${symbol}-technical-price`); if (technicalPrice) technicalPrice.textContent = money(snapshot.currentPrice);
   const low = document.querySelector(`#${symbol}-day-low`); if (low) low.textContent = money(snapshot.dayLow);
   const high = document.querySelector(`#${symbol}-day-high`); if (high) high.textContent = money(snapshot.dayHigh);
 }

@@ -36,7 +36,7 @@ public sealed class BinanceMarketClient(HttpClient httpClient, IMemoryCache cach
     public async Task<IReadOnlyList<Kline>> GetKlinesAsync(string symbol, string interval, int limit, CancellationToken cancellationToken)
     {
         symbol = Symbols.NormalizeAndValidate(symbol);
-        if (interval is not ("15m" or "1h" or "4h" or "1d")) throw new ArgumentException("Unsupported interval.");
+        if (interval is not ("15m" or "1h" or "4h" or "1d" or "1w" or "1M")) throw new ArgumentException("Unsupported interval.");
         limit = Math.Clamp(limit, 1, 1000);
         var key = $"klines:{symbol}:{interval}:{limit}";
         if (cache.TryGetValue<IReadOnlyList<Kline>>(key, out var cached)) return cached!;
@@ -46,7 +46,7 @@ public sealed class BinanceMarketClient(HttpClient httpClient, IMemoryCache cach
         using var json = JsonDocument.Parse(await response.Content.ReadAsStreamAsync(cancellationToken));
         var result = ParseKlines(json.RootElement);
         var cacheDuration = interval == "1d" && limit == 1 ? TimeSpan.FromSeconds(2)
-            : interval == "1d" ? TimeSpan.FromMinutes(10) : TimeSpan.FromMinutes(1);
+            : interval is "1d" or "1w" or "1M" ? TimeSpan.FromMinutes(10) : TimeSpan.FromMinutes(1);
         cache.Set(key, result, cacheDuration);
         return result;
     }
