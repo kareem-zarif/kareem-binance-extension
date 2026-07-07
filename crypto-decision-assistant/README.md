@@ -39,7 +39,14 @@ Only `BTCUSDT` and `ETHUSDT` are accepted. The live worker consumes Binance's pu
 
 ## Configure news RSS providers
 
-Edit `backend/CryptoDecisionAssistant.Api/appsettings.json`:
+Create the ignored local configuration from the safe template, then edit it as needed:
+
+```powershell
+cd backend/CryptoDecisionAssistant.Api
+Copy-Item appsettings.example.json appsettings.json
+```
+
+Configure providers in `appsettings.json`:
 
 ```json
 "News": {
