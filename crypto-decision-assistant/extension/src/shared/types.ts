@@ -42,6 +42,13 @@ export interface Settings {
   language: 'en' | 'ar';
 }
 
+export const MIN_REFRESH_SECONDS = 5;
+export const MAX_REFRESH_SECONDS = 45;
+export const normalizeRefreshSeconds = (value: unknown, fallback = 15) => {
+  const parsed = Number(value);
+  return Math.max(MIN_REFRESH_SECONDS, Math.min(MAX_REFRESH_SECONDS, Number.isFinite(parsed) ? parsed : fallback));
+};
+
 export const defaultSettings: Settings = {
   settingsSchemaVersion: 2,
   apiBaseUrl: 'http://localhost:5187', symbols: ['BTCUSDT', 'ETHUSDT'], refreshSeconds: 15, heldSymbols: [],

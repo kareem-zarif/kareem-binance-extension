@@ -1,5 +1,5 @@
 import { comparisonText, contextsFor, decisionGuidance, newsCategoryLabel, newsSentimentLabel, reasonsFor, scoreLegend, warningsFor, type Language } from '../shared/i18n';
-import { riskLabels, signalLabels, type Comparison, type Settings, type SymbolCode, type SymbolState } from '../shared/types';
+import { normalizeRefreshSeconds, riskLabels, signalLabels, type Comparison, type Settings, type SymbolCode, type SymbolState } from '../shared/types';
 
 const symbolFromUrl = (): SymbolCode | null => location.pathname.includes('BTC_USDT') ? 'BTCUSDT' : location.pathname.includes('ETH_USDT') ? 'ETHUSDT' : null;
 const symbol = symbolFromUrl();
@@ -55,7 +55,7 @@ async function mount(currentSymbol: SymbolCode) {
   void chrome.runtime.sendMessage({ type: 'REFRESH' });
   window.setInterval(() => {
     if (document.visibilityState === 'visible') void chrome.runtime.sendMessage({ type: 'REFRESH' });
-  }, Math.max(5, (initial.settings as Settings)?.refreshSeconds ?? 15) * 1000);
+  }, normalizeRefreshSeconds((initial.settings as Settings)?.refreshSeconds) * 1000);
   void chrome.runtime.sendMessage({ type: 'GET_STATE' }).then(response => {
     if (response.state[currentSymbol]) showState(response.state[currentSymbol]);
     else void chrome.runtime.sendMessage({ type: 'REFRESH' });

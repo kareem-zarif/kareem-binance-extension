@@ -60,7 +60,7 @@ Provider URLs are configuration only; no feed is hardcoded in business logic. `I
 
 The default verified feeds are Federal Reserve press releases, SEC press releases, CoinDesk, The Block, TradingView, Ethereum Foundation, and Glassnode Insights. Headlines are categorized and ranked in this order of market impact: US macro/rates/inflation/jobs, ETF flows, hacks/security, regulation, Binance operations, Ethereum upgrades, then general crypto. Reuters, Binance Announcements, and CoinGecko/CoinMarketCap remain disabled configuration slots because no stable public RSS endpoint was verified; add a licensed or official URL when available.
 
-The popup and Binance overlay show the latest matching RSS headlines under **What did the news scan find?** RSS results are cached for five minutes so a seconds-based market refresh does not repeatedly hit news providers.
+The popup and Binance overlay show the latest matching RSS headlines under **What did the news scan find?** RSS results are cached for two minutes so a seconds-based market refresh does not repeatedly hit news providers.
 
 ## Build and load the extension
 
@@ -91,7 +91,7 @@ It is draggable, collapsible, dark-mode compatible, and deliberately does not in
 
 English is the default interface language. Use the **العربية** button in the popup or the Language setting to switch the popup, overlay, settings, and notifications to Arabic.
 
-The refresh setting is in seconds (5–300). The analysis timeframe is selectable in Settings as `1H`, `4H`, `1D`, `1W`, or `1M`; EMA, ATR, trend, volume, support, and resistance use the selected Binance candle interval. An active Binance tab requests analysis at the configured refresh interval; SignalR uses long polling for service-worker reliability and polling remains a fallback. Mark BTC or ETH under **Assets I currently hold** to enable the conditional take-profit/sell-watch signal.
+The refresh setting is in seconds (5–45), keeping the next news-aware decision-score refresh under one minute after the two-minute RSS cache expires. The analysis timeframe is selectable in Settings as `1H`, `4H`, `1D`, `1W`, or `1M`; EMA, ATR, trend, volume, support, and resistance use the selected Binance candle interval. An active Binance tab requests analysis at the configured refresh interval; SignalR uses long polling for service-worker reliability and polling remains a fallback. Mark BTC or ETH under **Assets I currently hold** to enable the conditional take-profit/sell-watch signal.
 
 Each card includes today's UTC low/high, 7-day, 30-day, 365-day, and complete Binance listing-history low/high. Complete history is loaded through paged public daily candles and cached for 12 hours. Today's candle is cached for only two seconds, while SignalR price updates immediately extend the displayed daily high or low whenever the live price breaks either boundary.
 

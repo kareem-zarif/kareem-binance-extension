@@ -1,6 +1,6 @@
 import * as signalR from '@microsoft/signalr';
 import { getComparison, getSymbolState } from '../shared/api';
-import { defaultSettings, normalizeAnalysisTimeframe, signalLabels, type Settings, type Signal, type SymbolCode, type SymbolState } from '../shared/types';
+import { defaultSettings, normalizeAnalysisTimeframe, normalizeRefreshSeconds, signalLabels, type Settings, type Signal, type SymbolCode, type SymbolState } from '../shared/types';
 
 const STATE_KEY = 'marketState';
 const SETTINGS_KEY = 'settings';
@@ -13,10 +13,10 @@ let creatingOffscreenDocument: Promise<void> | undefined;
 
 async function settings(): Promise<Settings> {
   const stored = (await chrome.storage.local.get(SETTINGS_KEY))[SETTINGS_KEY] as (Partial<Settings> & { refreshMinutes?: number }) | undefined;
-  const refreshSeconds = stored?.refreshSeconds ?? Math.max(5, (stored?.refreshMinutes ?? 0.25) * 60);
+  const refreshSeconds = stored?.refreshSeconds ?? (stored?.refreshMinutes ?? 0.25) * 60;
   const legacySoundSettings = stored?.settingsSchemaVersion !== defaultSettings.settingsSchemaVersion;
   return { ...defaultSettings, ...stored, settingsSchemaVersion: defaultSettings.settingsSchemaVersion,
-    refreshSeconds: Math.max(5, Math.min(300, refreshSeconds)), heldSymbols: stored?.heldSymbols ?? [],
+    refreshSeconds: normalizeRefreshSeconds(refreshSeconds), heldSymbols: stored?.heldSymbols ?? [],
     analysisTimeframe: normalizeAnalysisTimeframe(stored?.analysisTimeframe),
     soundOnlyForStrongSignals: legacySoundSettings ? false : stored?.soundOnlyForStrongSignals ?? false };
 }

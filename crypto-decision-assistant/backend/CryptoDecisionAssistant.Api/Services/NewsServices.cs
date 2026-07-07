@@ -57,7 +57,7 @@ public sealed class RssNewsProvider(
         }
         var items = result.OrderByDescending(x => x.Importance).ThenBy(x => x.SourcePriority)
             .ThenByDescending(x => x.PublishedAt).Take(20).ToArray();
-        cache.Set(cacheKey, items, TimeSpan.FromMinutes(5));
+        cache.Set(cacheKey, items, TimeSpan.FromMinutes(2));
         return items;
     }
 

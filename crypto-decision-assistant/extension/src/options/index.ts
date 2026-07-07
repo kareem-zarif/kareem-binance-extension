@@ -1,5 +1,5 @@
 import './options.css';
-import { defaultSettings, normalizeAnalysisTimeframe, type PriceAlert, type Settings, type SymbolCode } from '../shared/types';
+import { defaultSettings, normalizeAnalysisTimeframe, normalizeRefreshSeconds, type PriceAlert, type Settings, type SymbolCode } from '../shared/types';
 
 const $ = <T extends HTMLElement>(id: string) => document.querySelector<T>(`#${id}`)!;
 let config: Settings;
@@ -8,7 +8,7 @@ async function load() {
   const stored = (await chrome.storage.local.get('settings')).settings as (Partial<Settings> & { refreshMinutes?: number }) | undefined;
   const legacySoundSettings = stored?.settingsSchemaVersion !== defaultSettings.settingsSchemaVersion;
   config = { ...defaultSettings, ...stored, settingsSchemaVersion: defaultSettings.settingsSchemaVersion,
-    refreshSeconds: stored?.refreshSeconds ?? Math.max(5, (stored?.refreshMinutes ?? 0.25) * 60),
+    refreshSeconds: normalizeRefreshSeconds(stored?.refreshSeconds ?? (stored?.refreshMinutes ?? 0.25) * 60),
     heldSymbols: stored?.heldSymbols ?? [], analysisTimeframe: normalizeAnalysisTimeframe(stored?.analysisTimeframe),
     soundOnlyForStrongSignals: legacySoundSettings ? false : stored?.soundOnlyForStrongSignals ?? false };
   $<HTMLSelectElement>('language').value = config.language;
@@ -54,7 +54,7 @@ $<HTMLFormElement>('form').addEventListener('submit', async event => {
   if ($<HTMLInputElement>('holdEth').checked) heldSymbols.push('ETHUSDT');
   if (!symbols.length) { $('saved').textContent = config.language === 'ar' ? 'اختر عملة واحدة على الأقل.' : 'Select at least one symbol.'; return; }
   config = { ...config, apiBaseUrl: $<HTMLInputElement>('apiBaseUrl').value.replace(/\/$/, ''), symbols,
-    refreshSeconds: Math.max(5, Math.min(300, Number($<HTMLInputElement>('refreshSeconds').value))), heldSymbols,
+    refreshSeconds: normalizeRefreshSeconds($<HTMLInputElement>('refreshSeconds').value), heldSymbols,
     analysisTimeframe: normalizeAnalysisTimeframe($<HTMLSelectElement>('analysisTimeframe').value),
     riskMode: $<HTMLSelectElement>('riskMode').value as Settings['riskMode'],
     soundEnabled: $<HTMLInputElement>('soundEnabled').checked,
