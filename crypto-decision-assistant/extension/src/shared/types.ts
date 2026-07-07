@@ -43,7 +43,7 @@ export interface Comparison {
 export interface NewsItem { title: string; source: string; publishedAt: string; detectedKeywords: string[]; sentiment: number; category: string; importance: number; sourcePriority: number; }
 export interface NewsSentiment { symbol: SymbolCode; score: number; labelArabic: string; items: NewsItem[]; }
 export interface SymbolState { snapshot: MarketSnapshot; analysis: SignalResult; news: NewsSentiment; }
-export interface PriceAlert { id: string; symbol: SymbolCode; condition: 'above' | 'below' | 'equal'; price: number; triggered?: boolean; }
+export interface PriceAlert { id: string; symbol: SymbolCode; condition: 'above' | 'below'; price: number; triggered?: boolean; }
 export interface Settings {
   settingsSchemaVersion: number;
   apiBaseUrl: string; symbols: SymbolCode[]; refreshSeconds: number; heldSymbols: SymbolCode[];

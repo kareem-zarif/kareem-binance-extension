@@ -124,12 +124,12 @@ function applyLanguage(language: Settings['language']) {
     } else element.textContent = element.dataset[language] ?? '';
   });
   const condition = $<HTMLSelectElement>('alertCondition');
-  condition.options[0].text = language === 'ar' ? 'أعلى من' : 'Above'; condition.options[1].text = language === 'ar' ? 'أقل من' : 'Below'; condition.options[2].text = language === 'ar' ? 'يساوي' : 'Equal to';
+  condition.options[0].text = language === 'ar' ? 'أعلى من أو يساوي' : 'At or above'; condition.options[1].text = language === 'ar' ? 'أقل من أو يساوي' : 'At or below';
   $<HTMLInputElement>('alertPrice').placeholder = language === 'ar' ? 'السعر' : 'Price';
   if (config) { config.language = language; renderAlerts(); }
 }
 function conditionLabel(condition: PriceAlert['condition'], language: Settings['language']) {
-  const labels = { above: { ar: 'أعلى من', en: 'above' }, below: { ar: 'أقل من', en: 'below' }, equal: { ar: 'يساوي', en: 'equals' } } as const;
+  const labels = { above: { ar: 'أعلى من أو يساوي', en: 'at or above' }, below: { ar: 'أقل من أو يساوي', en: 'at or below' } } as const;
   return labels[condition][language === 'ar' ? 'ar' : 'en'];
 }
 function formatPrice(value: number) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value); }
