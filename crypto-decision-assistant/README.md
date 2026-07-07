@@ -88,7 +88,7 @@ The refresh setting is in seconds (5–300). An active Binance tab requests anal
 
 Each card includes today's UTC low/high, 7-day, 30-day, 365-day, and complete Binance listing-history low/high. Complete history is loaded through paged public daily candles and cached for 12 hours. Today's candle is cached for only two seconds, while SignalR price updates immediately extend the displayed daily high or low whenever the live price breaks either boundary.
 
-The displayed percentage is a decision score, not a probability of profit: 75–100 permits a possible-buy setup only after risk gates pass, 60–74 means limit-only and no market buy, 45–59 means wait, and below 45 means avoid. The app explains the contributing technical, range, volume, volatility, and RSS-news factors.
+The displayed percentage is a decision score, not a probability of profit: 75–100 permits a possible-buy setup only after risk gates pass, 60–74 means limit-only and no market buy, 45–59 means wait, and below 45 means avoid. The risk label represents entry risk rather than volatility alone: an avoid score is high risk, a wait score is at least medium risk, and ATR volatility can raise either classification. The app explains the contributing technical, range, volume, volatility, and RSS-news factors.
 
 ## Alerts and order-status limitation
 

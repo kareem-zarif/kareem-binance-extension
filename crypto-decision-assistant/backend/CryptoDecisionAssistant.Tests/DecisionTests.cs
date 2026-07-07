@@ -14,6 +14,17 @@ public sealed class DecisionTests
     public void SignalMapping_UsesScoreAndRisk(int score, RiskLevel risk, DecisionSignal expected) =>
         Assert.Equal(expected, AnalysisService.MapSignal(score, risk));
 
+    [Theory]
+    [InlineData(35, 1, RiskLevel.HIGH)]
+    [InlineData(44, 1, RiskLevel.HIGH)]
+    [InlineData(45, 1, RiskLevel.MEDIUM)]
+    [InlineData(59, 1, RiskLevel.MEDIUM)]
+    [InlineData(60, 1, RiskLevel.LOW)]
+    [InlineData(80, 2.5, RiskLevel.MEDIUM)]
+    [InlineData(80, 5, RiskLevel.HIGH)]
+    public void RiskEstimation_UsesDecisionScoreAndAtr(int score, double atrPercent, RiskLevel expected) =>
+        Assert.Equal(expected, AnalysisService.EstimateRiskLevel(score, (decimal)atrPercent));
+
     [Fact]
     public void TakeProfitWatch_OverridesNormalMapping() =>
         Assert.Equal(DecisionSignal.TAKE_PROFIT_WATCH, AnalysisService.MapSignal(80, RiskLevel.LOW, true));

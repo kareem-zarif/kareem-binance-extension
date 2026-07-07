@@ -70,6 +70,13 @@ public sealed class AnalysisService(
         return DecisionSignal.AVOID;
     }
 
+    public static RiskLevel EstimateRiskLevel(int score, decimal atrPercent)
+    {
+        if (score < 45 || atrPercent >= 5) return RiskLevel.HIGH;
+        if (score < 60 || atrPercent >= 2.5m) return RiskLevel.MEDIUM;
+        return RiskLevel.LOW;
+    }
+
     public static DecisionSignal ApplyEntrySafetyRules(
         DecisionSignal signal, bool highRsi, bool nearWeeklyHigh, bool strongTrendAndVolume)
     {
@@ -119,7 +126,7 @@ public sealed class AnalysisService(
         { score -= 10; warnings.Add("هناك شمعة هابطة قوية مع حجم مرتفع."); }
 
         score = Math.Clamp(score, 0, 100);
-        var risk = atrPercent >= 5 || score < 35 ? RiskLevel.HIGH : atrPercent >= 2.5m ? RiskLevel.MEDIUM : RiskLevel.LOW;
+        var risk = EstimateRiskLevel(score, atrPercent);
         var highRsi = indicators.Rsi1h > 70 || indicators.Rsi4h > 70;
         var takeProfit = holdsAsset && (snapshot.DistanceFromMonthHighPercent <= 3 || snapshot.DistanceFromYearHighPercent <= 3) && highRsi;
         var strongTrendAndVolume = indicators.Trend == "UPTREND" && indicators.VolumeRatio >= 1.5m
