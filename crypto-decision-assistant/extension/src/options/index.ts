@@ -7,10 +7,14 @@ let config: Settings;
 async function load() {
   const stored = (await chrome.storage.local.get('settings')).settings as (Partial<Settings> & { refreshMinutes?: number }) | undefined;
   const legacySoundSettings = stored?.settingsSchemaVersion !== defaultSettings.settingsSchemaVersion;
+  const activePriceAlerts = (stored?.priceAlerts ?? defaultSettings.priceAlerts).filter(alert => !alert.triggered);
   config = { ...defaultSettings, ...stored, settingsSchemaVersion: defaultSettings.settingsSchemaVersion,
     refreshSeconds: normalizeRefreshSeconds(stored?.refreshSeconds ?? (stored?.refreshMinutes ?? 0.25) * 60),
     heldSymbols: stored?.heldSymbols ?? [], analysisTimeframe: normalizeAnalysisTimeframe(stored?.analysisTimeframe),
-    soundOnlyForStrongSignals: legacySoundSettings ? false : stored?.soundOnlyForStrongSignals ?? false };
+    soundOnlyForStrongSignals: legacySoundSettings ? false : stored?.soundOnlyForStrongSignals ?? false,
+    priceAlerts: activePriceAlerts };
+  if ((stored?.priceAlerts?.length ?? 0) !== activePriceAlerts.length)
+    await chrome.storage.local.set({ settings: config });
   $<HTMLSelectElement>('language').value = config.language;
   applyLanguage(config.language);
   $<HTMLInputElement>('apiBaseUrl').value = config.apiBaseUrl;
@@ -23,11 +27,20 @@ async function load() {
   $<HTMLSelectElement>('riskMode').value = config.riskMode;
   $<HTMLInputElement>('soundEnabled').checked = config.soundEnabled;
   $<HTMLInputElement>('soundOnlyForStrongSignals').checked = config.soundOnlyForStrongSignals;
+  syncSoundTestButton();
   $<HTMLInputElement>('notificationConfidence').value = String(config.notificationConfidence);
   renderAlerts();
 }
 
 $<HTMLSelectElement>('language').addEventListener('change', event => applyLanguage((event.target as HTMLSelectElement).value as Settings['language']));
+$<HTMLInputElement>('soundEnabled').addEventListener('change', syncSoundTestButton);
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !changes.settings?.newValue || !config) return;
+  const updated = changes.settings.newValue as Settings;
+  config.priceAlerts = (updated.priceAlerts ?? []).filter(alert => !alert.triggered);
+  renderAlerts();
+});
 
 $<HTMLButtonElement>('addAlert').addEventListener('click', () => {
   const price = Number($<HTMLInputElement>('alertPrice').value);
@@ -67,10 +80,14 @@ $<HTMLFormElement>('form').addEventListener('submit', async event => {
 
 function renderAlerts() {
   const host = $('alerts');
-  host.innerHTML = config.priceAlerts.map(x => `<div data-id="${x.id}"><span>${x.symbol} ${x.condition === 'above' ? (config.language === 'ar' ? 'أعلى من' : 'above') : (config.language === 'ar' ? 'أقل من' : 'below')} ${formatPrice(x.price)}${x.triggered ? (config.language === 'ar' ? ' — تم التنبيه' : ' — triggered') : ''}</span><button type="button">${config.language === 'ar' ? 'حذف' : 'Delete'}</button></div>`).join('');
+  host.innerHTML = config.priceAlerts.map(x => `<div data-id="${x.id}"><span>${x.symbol} ${x.condition === 'above' ? (config.language === 'ar' ? 'أعلى من' : 'above') : (config.language === 'ar' ? 'أقل من' : 'below')} ${formatPrice(x.price)}</span><button type="button">${config.language === 'ar' ? 'حذف' : 'Delete'}</button></div>`).join('');
   host.querySelectorAll<HTMLButtonElement>('button').forEach(button => button.addEventListener('click', () => {
     config.priceAlerts = config.priceAlerts.filter(x => x.id !== button.parentElement?.dataset.id); renderAlerts();
   }));
+}
+
+function syncSoundTestButton() {
+  $<HTMLButtonElement>('testNotification').disabled = !$<HTMLInputElement>('soundEnabled').checked;
 }
 
 function applyLanguage(language: Settings['language']) {

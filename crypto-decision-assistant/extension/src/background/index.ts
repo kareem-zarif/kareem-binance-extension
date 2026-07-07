@@ -15,10 +15,15 @@ async function settings(): Promise<Settings> {
   const stored = (await chrome.storage.local.get(SETTINGS_KEY))[SETTINGS_KEY] as (Partial<Settings> & { refreshMinutes?: number }) | undefined;
   const refreshSeconds = stored?.refreshSeconds ?? (stored?.refreshMinutes ?? 0.25) * 60;
   const legacySoundSettings = stored?.settingsSchemaVersion !== defaultSettings.settingsSchemaVersion;
-  return { ...defaultSettings, ...stored, settingsSchemaVersion: defaultSettings.settingsSchemaVersion,
+  const activePriceAlerts = (stored?.priceAlerts ?? defaultSettings.priceAlerts).filter(alert => !alert.triggered);
+  const config = { ...defaultSettings, ...stored, settingsSchemaVersion: defaultSettings.settingsSchemaVersion,
     refreshSeconds: normalizeRefreshSeconds(refreshSeconds), heldSymbols: stored?.heldSymbols ?? [],
     analysisTimeframe: normalizeAnalysisTimeframe(stored?.analysisTimeframe),
-    soundOnlyForStrongSignals: legacySoundSettings ? false : stored?.soundOnlyForStrongSignals ?? false };
+    soundOnlyForStrongSignals: legacySoundSettings ? false : stored?.soundOnlyForStrongSignals ?? false,
+    priceAlerts: activePriceAlerts };
+  if ((stored?.priceAlerts?.length ?? 0) !== activePriceAlerts.length)
+    await chrome.storage.local.set({ [SETTINGS_KEY]: config });
+  return config;
 }
 
 function scheduleRefresh(config: Settings) {
@@ -110,9 +115,10 @@ async function customPriceAlerts(state: SymbolState, config: Settings) {
   for (const alert of config.priceAlerts.filter(x => x.symbol === state.snapshot.symbol && !x.triggered)) {
     const hit = alert.condition === 'above' ? state.snapshot.currentPrice >= alert.price : state.snapshot.currentPrice <= alert.price;
     if (!hit) continue;
-    alert.triggered = true; changed = true;
     const currentPrice = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(state.snapshot.currentPrice);
     await notify(`price-${alert.id}`, config.language === 'ar' ? `${alert.symbol}: وصل السعر` : `${alert.symbol}: Price alert`, config.language === 'ar' ? `السعر ${currentPrice} حقق التنبيه.` : `Price ${currentPrice} reached your configured level.`, true);
+    config.priceAlerts = config.priceAlerts.filter(x => x.id !== alert.id);
+    changed = true;
   }
   if (changed) await chrome.storage.local.set({ [SETTINGS_KEY]: config });
 }
