@@ -3,8 +3,8 @@ import { deflateSync } from 'node:zlib';
 
 await mkdir(new URL('../public/assets/', import.meta.url), { recursive: true });
 
-const sampleRate = 8000;
-const seconds = 0.18;
+const sampleRate = 16000;
+const seconds = 0.65;
 const samples = Math.floor(sampleRate * seconds);
 const dataSize = samples * 2;
 const wav = Buffer.alloc(44 + dataSize);
@@ -13,8 +13,16 @@ wav.write('fmt ', 12); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20);
 wav.writeUInt16LE(1, 22); wav.writeUInt32LE(sampleRate, 24); wav.writeUInt32LE(sampleRate * 2, 28);
 wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34); wav.write('data', 36); wav.writeUInt32LE(dataSize, 40);
 for (let i = 0; i < samples; i++) {
-  const envelope = 1 - i / samples;
-  wav.writeInt16LE(Math.round(Math.sin(2 * Math.PI * 880 * i / sampleRate) * 9000 * envelope), 44 + i * 2);
+  const time = i / sampleRate;
+  const firstTone = time < 0.24;
+  const secondTone = time >= 0.32 && time < 0.62;
+  const toneStart = firstTone ? 0 : 0.32;
+  const toneDuration = firstTone ? 0.24 : 0.3;
+  const tonePosition = Math.max(0, time - toneStart);
+  const envelope = Math.min(1, tonePosition / 0.02) * Math.max(0, 1 - tonePosition / toneDuration);
+  const frequency = firstTone ? 880 : 1175;
+  const value = firstTone || secondTone ? Math.sin(2 * Math.PI * frequency * time) * 18000 * envelope : 0;
+  wav.writeInt16LE(Math.round(value), 44 + i * 2);
 }
 await writeFile(new URL('../public/assets/alert.wav', import.meta.url), wav);
 

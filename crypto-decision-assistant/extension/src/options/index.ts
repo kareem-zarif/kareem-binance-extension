@@ -6,7 +6,11 @@ let config: Settings;
 
 async function load() {
   const stored = (await chrome.storage.local.get('settings')).settings as (Partial<Settings> & { refreshMinutes?: number }) | undefined;
-  config = { ...defaultSettings, ...stored, refreshSeconds: stored?.refreshSeconds ?? Math.max(5, (stored?.refreshMinutes ?? 0.25) * 60), heldSymbols: stored?.heldSymbols ?? [], analysisTimeframe: normalizeAnalysisTimeframe(stored?.analysisTimeframe) };
+  const legacySoundSettings = stored?.settingsSchemaVersion !== defaultSettings.settingsSchemaVersion;
+  config = { ...defaultSettings, ...stored, settingsSchemaVersion: defaultSettings.settingsSchemaVersion,
+    refreshSeconds: stored?.refreshSeconds ?? Math.max(5, (stored?.refreshMinutes ?? 0.25) * 60),
+    heldSymbols: stored?.heldSymbols ?? [], analysisTimeframe: normalizeAnalysisTimeframe(stored?.analysisTimeframe),
+    soundOnlyForStrongSignals: legacySoundSettings ? false : stored?.soundOnlyForStrongSignals ?? false };
   $<HTMLSelectElement>('language').value = config.language;
   applyLanguage(config.language);
   $<HTMLInputElement>('apiBaseUrl').value = config.apiBaseUrl;

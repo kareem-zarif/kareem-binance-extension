@@ -34,6 +34,7 @@ export interface NewsSentiment { symbol: SymbolCode; score: number; labelArabic:
 export interface SymbolState { snapshot: MarketSnapshot; analysis: SignalResult; news: NewsSentiment; }
 export interface PriceAlert { id: string; symbol: SymbolCode; condition: 'above' | 'below'; price: number; triggered?: boolean; }
 export interface Settings {
+  settingsSchemaVersion: number;
   apiBaseUrl: string; symbols: SymbolCode[]; refreshSeconds: number; heldSymbols: SymbolCode[];
   analysisTimeframe: AnalysisTimeframe;
   riskMode: 'Conservative' | 'Balanced' | 'Aggressive'; soundEnabled: boolean;
@@ -42,9 +43,10 @@ export interface Settings {
 }
 
 export const defaultSettings: Settings = {
+  settingsSchemaVersion: 2,
   apiBaseUrl: 'http://localhost:5187', symbols: ['BTCUSDT', 'ETHUSDT'], refreshSeconds: 15, heldSymbols: [],
   analysisTimeframe: '4H',
-  riskMode: 'Balanced', soundEnabled: true, soundOnlyForStrongSignals: true,
+  riskMode: 'Balanced', soundEnabled: true, soundOnlyForStrongSignals: false,
   notificationConfidence: 70, priceAlerts: [], language: 'en'
 };
 

@@ -7,12 +7,18 @@ const SETTINGS_KEY = 'settings';
 let hub: signalR.HubConnection | undefined;
 let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 const nestedRoot = import.meta.url.includes('/crypto-decision-assistant/extension/dist/');
-const assetPath = (name: string) => nestedRoot ? `crypto-decision-assistant/extension/dist/assets/${name}` : `assets/${name}`;
+const extensionPath = (path: string) => nestedRoot ? `crypto-decision-assistant/extension/dist/${path}` : path;
+const assetPath = (name: string) => extensionPath(`assets/${name}`);
+let creatingOffscreenDocument: Promise<void> | undefined;
 
 async function settings(): Promise<Settings> {
   const stored = (await chrome.storage.local.get(SETTINGS_KEY))[SETTINGS_KEY] as (Partial<Settings> & { refreshMinutes?: number }) | undefined;
   const refreshSeconds = stored?.refreshSeconds ?? Math.max(5, (stored?.refreshMinutes ?? 0.25) * 60);
-  return { ...defaultSettings, ...stored, refreshSeconds: Math.max(5, Math.min(300, refreshSeconds)), heldSymbols: stored?.heldSymbols ?? [], analysisTimeframe: normalizeAnalysisTimeframe(stored?.analysisTimeframe) };
+  const legacySoundSettings = stored?.settingsSchemaVersion !== defaultSettings.settingsSchemaVersion;
+  return { ...defaultSettings, ...stored, settingsSchemaVersion: defaultSettings.settingsSchemaVersion,
+    refreshSeconds: Math.max(5, Math.min(300, refreshSeconds)), heldSymbols: stored?.heldSymbols ?? [],
+    analysisTimeframe: normalizeAnalysisTimeframe(stored?.analysisTimeframe),
+    soundOnlyForStrongSignals: legacySoundSettings ? false : stored?.soundOnlyForStrongSignals ?? false };
 }
 
 function scheduleRefresh(config: Settings) {
@@ -27,14 +33,29 @@ function scheduleRefresh(config: Settings) {
 async function notify(id: string, title: string, message: string, strong: boolean) {
   const config = await settings();
   const notificationId = await chrome.notifications.create(id, {
-    type: 'basic', iconUrl: assetPath('icon.png'), title, message, priority: strong ? 2 : 0
+    type: 'basic', iconUrl: chrome.runtime.getURL(assetPath('icon.png')), title, message, priority: strong ? 2 : 0
   });
-  if (config.soundEnabled && (!config.soundOnlyForStrongSignals || strong)) {
-    const tabs = await chrome.tabs.query({ url: 'https://www.binance.com/en/trade/*' });
-    const soundUrl = chrome.runtime.getURL(assetPath('alert.wav'));
-    await Promise.allSettled(tabs.map(tab => tab.id ? chrome.tabs.sendMessage(tab.id, { type: 'PLAY_SOUND', soundUrl }) : Promise.resolve()));
-  }
+  if (config.soundEnabled && (!config.soundOnlyForStrongSignals || strong)) await playNotificationSound();
   return notificationId;
+}
+
+async function playNotificationSound() {
+  const offscreenUrl = chrome.runtime.getURL(extensionPath('offscreen.html'));
+  const existing = await chrome.runtime.getContexts({
+    contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT], documentUrls: [offscreenUrl]
+  });
+  if (!existing.length) {
+    creatingOffscreenDocument ??= chrome.offscreen.createDocument({
+      url: extensionPath('offscreen.html'),
+      reasons: [chrome.offscreen.Reason.AUDIO_PLAYBACK],
+      justification: 'Play enabled notification sounds.'
+    }).finally(() => { creatingOffscreenDocument = undefined; });
+    await creatingOffscreenDocument;
+  }
+  const response = await chrome.runtime.sendMessage({
+    type: 'PLAY_NOTIFICATION_SOUND', soundUrl: chrome.runtime.getURL(assetPath('alert.wav'))
+  });
+  if (!response?.ok) throw new Error(response?.error ?? 'Notification sound could not be played.');
 }
 
 function effectiveThreshold(config: Settings) {
@@ -154,7 +175,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'TEST_NOTIFICATION') {
     settings().then(config => notify(`test-${Date.now()}`,
       config.language === 'ar' ? 'اختبار الإشعارات' : 'Notification test',
-      config.language === 'ar' ? 'الإشعارات تعمل. يجب أن تسمع الصوت إذا كانت صفحة Binance مفتوحة.' : 'Notifications are working. Sound plays when a Binance trade tab is open.', true))
+      config.language === 'ar' ? 'تم اختبار الإشعار والصوت.' : 'Notification and sound test completed.', true))
       .then(notificationId => sendResponse({ ok: true, notificationId }))
       .catch(error => sendResponse({ ok: false, error: String(error) })); return true;
   }

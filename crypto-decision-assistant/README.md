@@ -72,13 +72,13 @@ npm install
 npm run build
 ```
 
-Then open `chrome://extensions`, enable Developer mode, choose **Load unpacked**, and select this exact generated directory:
+Then open `chrome://extensions`, enable Developer mode, and choose **Load unpacked**. You can select the repository root when using its compatibility manifest, or select this generated directory directly:
 
 ```text
 D:\downloadsFromEdge\kareem_binannce\crypto-decision-assistant\extension\dist
 ```
 
-Do not select the repository root or the unbuilt `extension` source directory. Chrome needs the generated `dist/manifest.json` and bundled scripts.
+Do not select the unbuilt `extension` source directory. Both supported loading paths use the generated scripts under `extension/dist`.
 
 Start the backend before opening the popup. If its URL changes, update **عنوان الخادم** on the extension settings page and rebuild the manifest host permissions if the origin itself changes.
 

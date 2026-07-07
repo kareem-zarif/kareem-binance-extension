@@ -3,7 +3,7 @@
   "name": "Crypto Decision Assistant",
   "description": "Educational BTC and ETH decision support for Binance Spot without automated trading.",
   "version": "1.5.0",
-  "permissions": ["storage", "notifications", "alarms", "tabs"],
+  "permissions": ["storage", "notifications", "alarms", "tabs", "offscreen"],
   "host_permissions": [
     "http://localhost:5187/*",
     "https://www.binance.com/en/trade/BTC_USDT*",
