@@ -68,14 +68,16 @@ function render(root: ShadowRoot, state: SymbolState, language: Language) {
   const content = root.querySelector('#content') as HTMLElement; content.hidden = false;
   const s = state.snapshot, a = state.analysis;
   const labels = language === 'ar'
-    ? { confidence: 'درجة القرار', risk: 'المخاطرة', entry: 'الدخول المقترح', timeframe: 'الإطار الزمني', currentPrice: 'السعر الحالي', day: 'اليوم UTC', week: 'الأسبوع', month: 'الشهر', year: 'السنة', all: 'منذ الإدراج', why: 'ليه؟', warnings: 'التحذيرات', updated: 'آخر تحديث' }
-    : { confidence: 'Decision score', risk: 'Risk', entry: 'Suggested action', timeframe: 'Timeframe', currentPrice: 'Current price', day: 'Today UTC', week: 'Week', month: 'Month', year: 'Year', all: 'Since listing', why: 'Why?', warnings: 'Warnings', updated: 'Last updated' };
+    ? { decisionScore: 'درجة القرار', confidence: 'الثقة', risk: 'المخاطرة', entry: 'الدخول المقترح', timeframe: 'الإطار الزمني', currentPrice: 'السعر الحالي', day: 'اليوم UTC', week: 'الأسبوع', month: 'الشهر', year: 'السنة', all: 'منذ الإدراج', why: 'ليه؟', warnings: 'التحذيرات', updated: 'آخر تحديث', breakdown: 'تفصيل الدرجة', directions: 'الاتجاه المتوقع' }
+    : { decisionScore: 'Decision score', confidence: 'Confidence', risk: 'Risk', entry: 'Suggested action', timeframe: 'Timeframe', currentPrice: 'Current price', day: 'Today UTC', week: 'Week', month: 'Month', year: 'Year', all: 'Since listing', why: 'Why?', warnings: 'Warnings', updated: 'Last updated', breakdown: 'Score breakdown', directions: 'Expected direction' };
   const contexts = contextsFor(state, language);
   content.innerHTML = `<div class="top"><span>${s.symbol.replace('USDT', '/USDT')}</span><b id="live-price"><bdi>${formatPrice(s.currentPrice)}</bdi></b>
     <span class="badge ${a.signal}">${signalLabels[language][a.signal]}</span></div>
     <p class="decision"><b>${escapeHtml(decisionGuidance(state, language))}</b></p>
-    <div class="grid"><label>${labels.confidence} <b>${a.confidence}%</b></label><label>${labels.risk} <b>${riskLabels[language][a.riskLevel]}</b></label><label>${labels.entry} <b>${orderLabel(a.suggestedOrderType, language)}</b></label></div>
+    <div class="grid"><label>${labels.decisionScore} <b>${a.decisionScore}/100</b></label><label>${labels.confidence} <b>${a.confidence}%</b></label><label>${labels.risk} <b>${riskLabels[language][a.riskLevel]}</b></label><label>${labels.entry} <b>${orderLabel(a.suggestedOrderType, language)}</b></label></div>
     <div class="grid technical-grid"><label>${labels.timeframe} <b>${escapeHtml(a.analysisTimeframe || '—')}</b></label><label>${labels.currentPrice} <b id="technical-live-price"><bdi>${formatPrice(s.currentPrice)}</bdi></b></label><label>EMA20 <b><bdi>${formatPrice(a.ema20)}</bdi></b></label><label>EMA50 <b><bdi>${formatPrice(a.ema50)}</bdi></b></label></div>
+    <details><summary>${labels.breakdown}</summary>${scoreBreakdown(a, language)}</details>
+    <details><summary>${labels.directions}</summary>${expectedDirections(a, language)}<small>${escapeHtml(language === 'ar' ? a.probabilityDisclaimerArabic : 'Probabilities are data-based estimates, not predictions or financial advice.')}</small></details>
     ${range(labels.day, s.dayLow, s.dayHigh, distanceLow(s.currentPrice, s.dayLow), distanceHigh(s.currentPrice, s.dayHigh), language, 'day')}
     ${range(labels.week, s.weekLow, s.weekHigh, s.distanceFromWeekLowPercent, s.distanceFromWeekHighPercent, language)}
     ${range(labels.month, s.monthLow, s.monthHigh, s.distanceFromMonthLowPercent, s.distanceFromMonthHighPercent, language)}
@@ -113,6 +115,17 @@ function updateLiveDay(root: ShadowRoot, snapshot: SymbolState['snapshot']) {
 function formatUpdated(value: string, language: Language) { const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat(language === 'ar' ? 'ar-EG' : 'en-US', { dateStyle: 'short', timeStyle: 'medium' }).format(date); }
 function orderLabel(value: string, language: Language) { return value === 'MARKET' ? 'Market' : value === 'LIMIT' ? 'Limit' : language === 'ar' ? 'لا إجراء' : 'No action'; }
 function escapeHtml(value: string) { const element = document.createElement('span'); element.textContent = value; return element.innerHTML; }
+function scoreBreakdown(analysis: SymbolState['analysis'], language: Language) {
+  const b = analysis.scoreBreakdown;
+  const labels = language === 'ar'
+    ? [['فني', b.technicalScore], ['أخبار', b.newsScore], ['ماكرو', b.macroScore], ['تاريخي', b.historicalScore], ['مخاطرة', b.riskScore]]
+    : [['Technical', b.technicalScore], ['News', b.newsScore], ['Macro', b.macroScore], ['Historical', b.historicalScore], ['Risk', b.riskScore]];
+  return `<div class="grid">${labels.map(([label, value]) => `<label>${escapeHtml(String(label))} <b>${Number(value)}/100</b></label>`).join('')}</div>`;
+}
+function expectedDirections(analysis: SymbolState['analysis'], language: Language) {
+  if (!analysis.expectedDirections.length) return '';
+  return `<ul>${analysis.expectedDirections.map(x => `<li><b>${escapeHtml(x.window)}</b>: ${x.bullishPercent}% ${language === 'ar' ? 'صعود' : 'bullish'} / ${x.bearishPercent}% ${language === 'ar' ? 'هبوط' : 'bearish'}${language === 'ar' ? ` — ${escapeHtml(x.rationaleArabic)}` : ''}</li>`).join('')}</ul>`;
+}
 function newsList(state: SymbolState, language: Language) {
   const items = state.news?.items ?? [];
   if (!items.length) return `<p>${language === 'ar' ? 'لم يجد مزود RSS أخبارًا حديثة مطابقة.' : 'No recent matching RSS headlines were found.'}</p>`;

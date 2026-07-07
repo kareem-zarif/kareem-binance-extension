@@ -75,4 +75,25 @@ public sealed class DecisionTests
         Assert.Equal(expected,
             AnalysisService.ApplyEntrySafetyRules(DecisionSignal.MARKET_NOW, false, true, strongConfirmation));
     }
+
+    [Fact]
+    public void FinalDecisionScore_PenalizesHighRiskScore()
+    {
+        var lowRisk = new DecisionScoreBreakdownDto(80, 60, 50, 60, 20);
+        var highRisk = lowRisk with { RiskScore = 80 };
+
+        Assert.True(AnalysisService.FinalDecisionScore(lowRisk) > AnalysisService.FinalDecisionScore(highRisk));
+    }
+
+    [Fact]
+    public void ExpectedDirections_ReturnsProbabilisticWindows()
+    {
+        var indicators = new TechnicalIndicatorDto(45, 52, "4H", 100, 95, 90, 85, 2, 1, 1, 28, 110, 100, 90, 98, 1000, 3, 1.4m, "UPTREND", 92, 108, false);
+        var sentiment = new NewsSentimentDto("BTCUSDT", 4, "إيجابي", []);
+
+        var windows = AnalysisService.ExpectedDirections(70, new DecisionScoreBreakdownDto(75, 70, 55, 60, 30), indicators, sentiment);
+
+        Assert.Equal(["4H", "24H", "7D"], windows.Select(x => x.Window));
+        Assert.All(windows, x => Assert.Equal(100, x.BullishPercent + x.BearishPercent));
+    }
 }

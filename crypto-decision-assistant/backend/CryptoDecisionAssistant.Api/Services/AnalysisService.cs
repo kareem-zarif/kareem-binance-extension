@@ -15,6 +15,7 @@ public sealed class AnalysisService(
     INewsSentimentService news) : IAnalysisService
 {
     private const string Disclaimer = "الدخول ماركت مخاطرة أعلى من Limit. الإشارة للتعليم والمساعدة وليست توصية مالية مؤكدة.";
+    private const string ProbabilityDisclaimer = "النسب احتمالية مبنية على البيانات المتاحة وليست تنبؤًا مؤكدًا بالمستقبل ولا توصية مالية.";
 
     public async Task<SignalDto> GetSignalAsync(string symbol, bool holdsAsset, string timeframe, CancellationToken cancellationToken)
     {
@@ -96,38 +97,44 @@ public sealed class AnalysisService(
         var snapshot = await snapshotTask;
         var indicators = await technicalTask;
         var sentiment = await newsTask;
-        var score = 50;
         var reasons = new List<string>();
         var warnings = new List<string> { Disclaimer };
 
         if ((snapshot.DistanceFromWeekLowPercent <= 5 || snapshot.DistanceFromMonthLowPercent <= 7) && indicators.RsiAnalysis >= 30)
-        { score += 10; reasons.Add("السعر قريب من قاع أسبوعي أو شهري وRSI لا يظهر انهيارًا حاليًا."); }
+        { reasons.Add("السعر قريب من قاع أسبوعي أو شهري وRSI لا يظهر انهيارًا حاليًا."); }
         if (indicators.Rsi1h is >= 35 and <= 50)
-        { score += 8; reasons.Add("RSI على الساعة في منطقة مناسبة للمراقبة بعد تراجع."); }
+        { reasons.Add("RSI على الساعة في منطقة مناسبة للمراقبة بعد تراجع."); }
         if (snapshot.CurrentPrice > indicators.Ema50 && indicators.Ema20 > indicators.Ema50)
-        { score += 10; reasons.Add("السعر فوق EMA50 وEMA20 أعلى منه، وهذا يدعم الاتجاه الصاعد."); }
+        { reasons.Add("السعر فوق EMA50 وEMA20 أعلى منه، وهذا يدعم الاتجاه الصاعد."); }
+        if (indicators.MacdHistogram > 0)
+        { reasons.Add("MACD إيجابي ويدعم الزخم الحالي."); }
+        if (indicators.Adx14 >= 25)
+        { reasons.Add("ADX يشير إلى أن قوة الاتجاه أعلى من المعتاد."); }
         if (sentiment.Score > 0)
-        { var points = sentiment.Score >= 5 ? 10 : 5; score += points; reasons.Add("الأخبار المرصودة تميل للإيجابية."); }
+        { reasons.Add("الأخبار المرصودة تميل للإيجابية."); }
         if (indicators.VolumeRatio >= 1.2m && snapshot.Change24hPercent > 0)
-        { score += 8; reasons.Add("الحجم يرتفع مع تحرك السعر للأعلى."); }
+        { reasons.Add("الحجم يرتفع مع تحرك السعر للأعلى."); }
 
         if (snapshot.DistanceFromYearHighPercent <= 3)
-        { score -= 20; warnings.Add("السعر قريب جدًا من أعلى السنة؛ مطاردة السعر مخاطرتها مرتفعة."); }
+        { warnings.Add("السعر قريب جدًا من أعلى السنة؛ مطاردة السعر مخاطرتها مرتفعة."); }
         else if (snapshot.DistanceFromWeekHighPercent <= 3 || snapshot.DistanceFromMonthHighPercent <= 5)
-        { score -= 10; warnings.Add("السعر قريب من قمة أسبوعية أو شهرية."); }
+        { warnings.Add("السعر قريب من قمة أسبوعية أو شهرية."); }
         if (indicators.Rsi1h > 70 || indicators.RsiAnalysis > 70)
-        { score -= 15; warnings.Add("RSI أعلى من 70 وقد يكون السعر في تشبع شرائي."); }
+        { warnings.Add("RSI أعلى من 70 وقد يكون السعر في تشبع شرائي."); }
         if (snapshot.CurrentPrice < indicators.Ema50 && indicators.Ema20 < indicators.Ema50)
-        { score -= 10; warnings.Add("السعر تحت EMA50 والترند ضعيف."); }
+        { warnings.Add("السعر تحت EMA50 والترند ضعيف."); }
+        if (indicators.MacdHistogram < 0)
+        { warnings.Add("MACD سلبي ويقلل جودة الدخول الحالي."); }
         if (sentiment.Score < 0)
-        { var penalty = sentiment.Score <= -5 ? 15 : 5; score -= penalty; warnings.Add("الأخبار المرصودة تميل للسلبية."); }
+        { warnings.Add("الأخبار المرصودة تميل للسلبية."); }
         var atrPercent = snapshot.CurrentPrice == 0 ? 0 : indicators.Atr14 / snapshot.CurrentPrice * 100;
         if (atrPercent >= 5)
-        { score -= 10; warnings.Add("التقلب الحالي مرتفع حسب ATR."); }
+        { warnings.Add("التقلب الحالي مرتفع حسب ATR."); }
         if (indicators.StrongRedCandleWithVolume)
-        { score -= 10; warnings.Add("هناك شمعة هابطة قوية مع حجم مرتفع."); }
+        { warnings.Add("هناك شمعة هابطة قوية مع حجم مرتفع."); }
 
-        score = Math.Clamp(score, 0, 100);
+        var breakdown = BuildScoreBreakdown(snapshot, indicators, sentiment);
+        var score = FinalDecisionScore(breakdown);
         var risk = EstimateRiskLevel(score, atrPercent);
         var highRsi = indicators.Rsi1h > 70 || indicators.RsiAnalysis > 70;
         var takeProfit = holdsAsset && (snapshot.DistanceFromMonthHighPercent <= 3 || snapshot.DistanceFromYearHighPercent <= 3) && highRsi;
@@ -137,7 +144,9 @@ public sealed class AnalysisService(
             snapshot.DistanceFromWeekHighPercent <= 3, strongTrendAndVolume);
         if (highRsi && !warnings.Any(x => x.Contains("RSI أعلى", StringComparison.Ordinal)))
             warnings.Add("RSI أعلى من 70؛ لا نسمح بإشارة دخول Market في هذه الحالة.");
-        return new Evaluation(symbol, score, risk, signal, snapshot, indicators, sentiment, reasons, warnings);
+        return new Evaluation(symbol, score, EstimateConfidence(score, risk, indicators, sentiment, reasons, warnings),
+            risk, signal, snapshot, indicators, sentiment, breakdown, ExpectedDirections(score, breakdown, indicators, sentiment),
+            reasons, warnings);
     }
 
     private static SignalDto ToDto(Evaluation x, string comparison)
@@ -158,18 +167,103 @@ public sealed class AnalysisService(
         var technicalContext = x.Indicators.Trend == "DOWNTREND"
             ? "السعر تحت EMA50 والترند ضعيف، الأفضل الانتظار."
             : $"الاتجاه الحالي {TrendArabic(x.Indicators.Trend)}، وRSI الساعة {x.Indicators.Rsi1h:0.##}.";
-        return new SignalDto(x.Symbol, x.Signal, x.Score, x.Risk, order,
+        return new SignalDto(x.Symbol, x.Signal, x.Score, x.Confidence, x.Risk, order,
             x.Indicators.Timeframe, x.Snapshot.CurrentPrice, x.Indicators.Ema20, x.Indicators.Ema50,
             order == SuggestedOrderType.LIMIT ? $"منطقة متابعة تقريبية بين {low:N2} و{high:N2} قرب الدعم، وليست أمر شراء." : "لا توجد منطقة Limit مقترحة مع الإشارة الحالية.",
             x.Reasons.Count > 0 ? x.Reasons : ["لا توجد أفضلية فنية قوية وواضحة الآن."], x.Warnings,
-            priceContext, $"مزاج الأخبار: {x.Sentiment.LabelArabic} (النتيجة {x.Sentiment.Score}).", technicalContext, comparison);
+            priceContext, $"مزاج الأخبار: {x.Sentiment.LabelArabic} (النتيجة {x.Sentiment.Score}).", technicalContext, comparison,
+            x.Breakdown, x.ExpectedDirections, ProbabilityDisclaimer);
     }
 
+    internal static DecisionScoreBreakdownDto BuildScoreBreakdown(
+        MarketSnapshotDto snapshot, TechnicalIndicatorDto indicators, NewsSentimentDto sentiment)
+    {
+        var technical = 50;
+        if (snapshot.CurrentPrice > indicators.Ema20) technical += 8;
+        if (snapshot.CurrentPrice > indicators.Ema50 && indicators.Ema20 > indicators.Ema50) technical += 12;
+        if (indicators.Ema100 is > 0 && snapshot.CurrentPrice > indicators.Ema100) technical += 4;
+        if (indicators.Ema200 is > 0 && snapshot.CurrentPrice > indicators.Ema200) technical += 4;
+        if (indicators.RsiAnalysis is >= 35 and <= 60) technical += 8;
+        if (indicators.MacdHistogram > 0) technical += 7;
+        if (indicators.Adx14 >= 25 && indicators.Trend == "UPTREND") technical += 5;
+        if (indicators.VolumeRatio >= 1.2m && snapshot.Change24hPercent > 0) technical += 6;
+        if (snapshot.CurrentPrice < indicators.Ema50 && indicators.Ema20 < indicators.Ema50) technical -= 12;
+        if (indicators.RsiAnalysis > 70 || indicators.Rsi1h > 70) technical -= 12;
+        if (indicators.StrongRedCandleWithVolume) technical -= 10;
+        if (indicators.MacdHistogram < 0) technical -= 6;
+
+        var newsScore = ClampScore(50 + sentiment.Score * 5);
+        var macroItems = sentiment.Items.Where(x => x.Category is "MACRO" or "REGULATION" or "ETF_FLOWS").ToArray();
+        var macroScore = macroItems.Length == 0
+            ? 50
+            : ClampScore(50 + (int)Math.Round(macroItems.Sum(x => x.Sentiment * x.Importance) * 4m));
+
+        var historical = 50;
+        if (snapshot.DistanceFromWeekLowPercent <= 5 || snapshot.DistanceFromMonthLowPercent <= 7) historical += 10;
+        if (snapshot.DistanceFromWeekHighPercent <= 3 || snapshot.DistanceFromMonthHighPercent <= 5) historical -= 8;
+        if (snapshot.DistanceFromYearHighPercent <= 3) historical -= 14;
+        if (indicators.Trend == "UPTREND") historical += 8;
+        if (indicators.Trend == "DOWNTREND") historical -= 8;
+        if (indicators.VolumeRatio >= 1.2m && snapshot.Change24hPercent > 0) historical += 5;
+
+        var atrPercent = snapshot.CurrentPrice == 0 ? 0 : indicators.Atr14 / snapshot.CurrentPrice * 100;
+        var riskScore = 25 + (int)Math.Round(atrPercent * 10);
+        if (snapshot.DistanceFromWeekHighPercent <= 3) riskScore += 12;
+        if (snapshot.DistanceFromYearHighPercent <= 3) riskScore += 20;
+        if (indicators.RsiAnalysis > 70 || indicators.Rsi1h > 70) riskScore += 15;
+        if (sentiment.Score <= -5) riskScore += 12;
+        else if (sentiment.Score < 0) riskScore += 6;
+
+        return new DecisionScoreBreakdownDto(ClampScore(technical), newsScore, macroScore, ClampScore(historical), ClampScore(riskScore));
+    }
+
+    public static int FinalDecisionScore(DecisionScoreBreakdownDto breakdown)
+    {
+        var score = breakdown.TechnicalScore * .45m
+            + breakdown.NewsScore * .20m
+            + breakdown.MacroScore * .10m
+            + breakdown.HistoricalScore * .15m
+            + (100 - breakdown.RiskScore) * .10m;
+        return ClampScore((int)Math.Round(score));
+    }
+
+    internal static int EstimateConfidence(int score, RiskLevel risk, TechnicalIndicatorDto indicators, NewsSentimentDto sentiment,
+        IReadOnlyCollection<string> reasons, IReadOnlyCollection<string> warnings)
+    {
+        var confidence = 55 + Math.Min(15, reasons.Count * 4);
+        confidence += indicators.Adx14 >= 25 ? 6 : 0;
+        confidence += Math.Abs(sentiment.Score) >= 5 ? 5 : sentiment.Score != 0 ? 2 : 0;
+        confidence += score is >= 65 or < 45 ? 5 : 0;
+        confidence -= Math.Max(0, warnings.Count - 1) * 4;
+        confidence -= risk == RiskLevel.HIGH ? 10 : risk == RiskLevel.MEDIUM ? 4 : 0;
+        return ClampScore(confidence);
+    }
+
+    public static IReadOnlyList<ExpectedDirectionDto> ExpectedDirections(
+        int score, DecisionScoreBreakdownDto breakdown, TechnicalIndicatorDto indicators, NewsSentimentDto sentiment)
+    {
+        var trendBoost = indicators.Trend == "UPTREND" ? 6 : indicators.Trend == "DOWNTREND" ? -6 : 0;
+        var macdBoost = indicators.MacdHistogram > 0 ? 3 : indicators.MacdHistogram < 0 ? -3 : 0;
+        var newsBoost = Math.Clamp(sentiment.Score, -10, 10);
+        var fourHours = ClampPercent(50 + (score - 50) * .45m + trendBoost + macdBoost);
+        var day = ClampPercent(50 + (score - 50) * .35m + trendBoost + newsBoost * .4m);
+        var week = ClampPercent(50 + (breakdown.HistoricalScore - 50) * .25m + (breakdown.MacroScore - 50) * .20m + newsBoost * .5m);
+        return
+        [
+            new("4H", fourHours, 100 - fourHours, "يعتمد على الزخم الفني القريب، MACD، والاتجاه الحالي."),
+            new("24H", day, 100 - day, "يمزج الاتجاه الفني مع أثر الأخبار الحالية خلال اليوم."),
+            new("7D", week, 100 - week, "يعتمد أكثر على الأخبار/الماكرو والسلوك التاريخي التقريبي، وليس تنبؤًا.")
+        ];
+    }
+
+    private static int ClampScore(int value) => Math.Clamp(value, 0, 100);
+    private static int ClampPercent(decimal value) => Math.Clamp((int)Math.Round(value), 5, 95);
     private static decimal AtrPercent(Evaluation x) => x.Snapshot.CurrentPrice == 0 ? 0 : x.Indicators.Atr14 / x.Snapshot.CurrentPrice * 100;
     private static string Short(string symbol) => symbol.StartsWith("BTC", StringComparison.Ordinal) ? "BTC" : "ETH";
     private static string TrendArabic(string trend) => trend switch { "UPTREND" => "صاعد", "DOWNTREND" => "هابط", _ => "جانبي" };
 
-    internal sealed record Evaluation(string Symbol, int Score, RiskLevel Risk, DecisionSignal Signal,
+    internal sealed record Evaluation(string Symbol, int Score, int Confidence, RiskLevel Risk, DecisionSignal Signal,
         MarketSnapshotDto Snapshot, TechnicalIndicatorDto Indicators, NewsSentimentDto Sentiment,
+        DecisionScoreBreakdownDto Breakdown, IReadOnlyList<ExpectedDirectionDto> ExpectedDirections,
         List<string> Reasons, List<string> Warnings);
 }

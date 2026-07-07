@@ -61,14 +61,17 @@ function normalizeAnalysis(raw: Record<string, unknown>, fallbackSymbol: SymbolC
   const risk = enumName(pick(raw, 'riskLevel', 'RiskLevel'), ['LOW', 'MEDIUM', 'HIGH'], ['LOW', 'MEDIUM', 'HIGH']);
   const confidenceValue = pick(raw, 'confidence', 'Confidence');
   const confidence = number(confidenceValue, 0);
-  const incomplete = !rawSignal || !risk || confidenceValue === undefined || !Number.isFinite(Number(confidenceValue));
-  const signal = incomplete ? 'WAIT' : rawSignal === 'TAKE_PROFIT_WATCH' ? rawSignal : mappedSignal(confidence, risk);
+  const decisionScoreValue = pick(raw, 'decisionScore', 'DecisionScore') ?? confidenceValue;
+  const decisionScore = number(decisionScoreValue, confidence);
+  const incomplete = !rawSignal || !risk || decisionScoreValue === undefined || !Number.isFinite(Number(decisionScoreValue));
+  const signal = incomplete ? 'WAIT' : rawSignal === 'TAKE_PROFIT_WATCH' ? rawSignal : mappedSignal(decisionScore, risk);
   const order = incomplete || signal === 'WAIT' || signal === 'AVOID' || signal === 'TAKE_PROFIT_WATCH' ? 'NO_ACTION' : signal === 'LIMIT_ONLY' ? 'LIMIT' : 'MARKET';
   const warnings = strings(pick(raw, 'warningsArabic', 'WarningsArabic'));
   if (incomplete && !warnings.includes(incompleteWarningArabic)) warnings.unshift(incompleteWarningArabic);
   return {
     symbol: text(pick(raw, 'symbol', 'Symbol'), fallbackSymbol) as SymbolCode,
-    signal, confidence: Math.max(0, Math.min(100, confidence)), riskLevel: incomplete ? 'HIGH' : risk,
+    signal, decisionScore: Math.max(0, Math.min(100, decisionScore)),
+    confidence: Math.max(0, Math.min(100, confidence)), riskLevel: incomplete ? 'HIGH' : risk,
     suggestedOrderType: order,
     analysisTimeframe: text(pick(raw, 'analysisTimeframe', 'AnalysisTimeframe')),
     currentPrice: number(pick(raw, 'currentPrice', 'CurrentPrice')),
@@ -80,8 +83,34 @@ function normalizeAnalysis(raw: Record<string, unknown>, fallbackSymbol: SymbolC
     priceContextArabic: text(pick(raw, 'priceContextArabic', 'PriceContextArabic')),
     newsContextArabic: text(pick(raw, 'newsContextArabic', 'NewsContextArabic')),
     technicalContextArabic: text(pick(raw, 'technicalContextArabic', 'TechnicalContextArabic')),
-    btcVsEthComparisonArabic: text(pick(raw, 'btcVsEthComparisonArabic', 'BtcVsEthComparisonArabic')) || undefined
+    btcVsEthComparisonArabic: text(pick(raw, 'btcVsEthComparisonArabic', 'BtcVsEthComparisonArabic')) || undefined,
+    scoreBreakdown: normalizeBreakdown(pick(raw, 'scoreBreakdown', 'ScoreBreakdown')),
+    expectedDirections: normalizeDirections(pick(raw, 'expectedDirections', 'ExpectedDirections')),
+    probabilityDisclaimerArabic: text(pick(raw, 'probabilityDisclaimerArabic', 'ProbabilityDisclaimerArabic'))
   };
+}
+
+function normalizeBreakdown(value: unknown): SignalResult['scoreBreakdown'] {
+  const raw = (value ?? {}) as Record<string, unknown>;
+  return {
+    technicalScore: number(pick(raw, 'technicalScore', 'TechnicalScore'), 0),
+    newsScore: number(pick(raw, 'newsScore', 'NewsScore'), 0),
+    macroScore: number(pick(raw, 'macroScore', 'MacroScore'), 0),
+    historicalScore: number(pick(raw, 'historicalScore', 'HistoricalScore'), 0),
+    riskScore: number(pick(raw, 'riskScore', 'RiskScore'), 0)
+  };
+}
+
+function normalizeDirections(value: unknown): SignalResult['expectedDirections'] {
+  return Array.isArray(value) ? value.map(item => {
+    const raw = item as Record<string, unknown>;
+    return {
+      window: text(pick(raw, 'window', 'Window')),
+      bullishPercent: number(pick(raw, 'bullishPercent', 'BullishPercent')),
+      bearishPercent: number(pick(raw, 'bearishPercent', 'BearishPercent')),
+      rationaleArabic: text(pick(raw, 'rationaleArabic', 'RationaleArabic'))
+    };
+  }).filter(item => item.window) : [];
 }
 
 function normalizeNews(raw: Record<string, unknown>, fallbackSymbol: SymbolCode): NewsSentiment {

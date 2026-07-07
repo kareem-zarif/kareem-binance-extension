@@ -77,7 +77,7 @@ async function refreshAll() {
       const state = await getSymbolState(config.apiBaseUrl, symbol, config.heldSymbols.includes(symbol), config.analysisTimeframe);
       next[symbol] = state;
       const oldSignal = previous[symbol]?.analysis.signal;
-      if (oldSignal && oldSignal !== state.analysis.signal) await signalNotification(symbol, oldSignal, state.analysis.signal, state.analysis.confidence, config);
+      if (oldSignal && oldSignal !== state.analysis.signal) await signalNotification(symbol, oldSignal, state.analysis.signal, state.analysis.decisionScore, config);
       await rangeNotifications(state, previous[symbol], config);
       await customPriceAlerts(state, config);
     } catch (error) {
@@ -95,7 +95,7 @@ async function signalNotification(symbol: SymbolCode, oldSignal: Signal, current
 }
 
 async function rangeNotifications(current: SymbolState, previous: SymbolState | undefined, config: Settings) {
-  if (current.analysis.confidence < effectiveThreshold(config)) return;
+  if (current.analysis.decisionScore < effectiveThreshold(config)) return;
   const ranges = [
     [config.language === 'ar' ? 'قاع الأسبوع' : 'weekly low', current.snapshot.distanceFromWeekLowPercent, previous?.snapshot.distanceFromWeekLowPercent],
     [config.language === 'ar' ? 'قمة الأسبوع' : 'weekly high', current.snapshot.distanceFromWeekHighPercent, previous?.snapshot.distanceFromWeekHighPercent],

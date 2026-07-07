@@ -17,11 +17,22 @@ export interface MarketSnapshot {
 }
 
 export interface SignalResult {
-  symbol: SymbolCode; signal: Signal; confidence: number; riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+  symbol: SymbolCode; signal: Signal; decisionScore: number; confidence: number; riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
   suggestedOrderType: 'MARKET' | 'LIMIT' | 'NO_ACTION'; suggestedLimitZoneTextArabic: string;
   analysisTimeframe: string; currentPrice: number; ema20: number; ema50: number;
   reasonsArabic: string[]; warningsArabic: string[]; priceContextArabic: string;
   newsContextArabic: string; technicalContextArabic: string; btcVsEthComparisonArabic?: string;
+  scoreBreakdown: DecisionScoreBreakdown;
+  expectedDirections: ExpectedDirection[];
+  probabilityDisclaimerArabic: string;
+}
+
+export interface DecisionScoreBreakdown {
+  technicalScore: number; newsScore: number; macroScore: number; historicalScore: number; riskScore: number;
+}
+
+export interface ExpectedDirection {
+  window: string; bullishPercent: number; bearishPercent: number; rationaleArabic: string;
 }
 
 export interface Comparison {

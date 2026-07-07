@@ -50,7 +50,7 @@ export function comparisonText(comparison: { betterForBeginnerNow: string; faste
 }
 
 export function decisionGuidance(state: SymbolState, language: Language) {
-  const score = state.analysis.confidence;
+  const score = state.analysis.decisionScore;
   const signal = state.analysis.signal;
   if (language === 'ar') return signal === 'MARKET_NOW'
     ? `إعداد شراء محتمل — درجة القرار ${score}/100. الدخول Market اجتاز شروط الأمان لكنه ليس ضمانًا للربح.`

@@ -56,17 +56,18 @@ function card(state: SymbolState, lang: Language) {
   const s = state.snapshot, a = state.analysis;
   const id = `reasons-${s.symbol}`;
   const labels = lang === 'ar'
-    ? { confidence: 'الثقة', risk: 'المخاطرة', timeframe: 'الإطار الزمني', currentPrice: 'السعر الحالي', day: 'اليوم UTC', week: 'الأسبوع', month: 'الشهر', year: 'السنة', all: 'منذ الإدراج', min: 'أقل', max: 'أعلى', why: 'ليه؟', updated: 'آخر تحديث' }
-    : { confidence: 'Decision score', risk: 'Risk', timeframe: 'Timeframe', currentPrice: 'Current price', day: 'Today UTC', week: 'Week', month: 'Month', year: 'Year', all: 'Since listing', min: 'Min', max: 'Max', why: 'Why?', updated: 'Last updated' };
+    ? { decisionScore: 'درجة القرار', confidence: 'الثقة', risk: 'المخاطرة', timeframe: 'الإطار الزمني', currentPrice: 'السعر الحالي', day: 'اليوم UTC', week: 'الأسبوع', month: 'الشهر', year: 'السنة', all: 'منذ الإدراج', min: 'أقل', max: 'أعلى', why: 'ليه؟', updated: 'آخر تحديث' }
+    : { decisionScore: 'Decision score', confidence: 'Confidence', risk: 'Risk', timeframe: 'Timeframe', currentPrice: 'Current price', day: 'Today UTC', week: 'Week', month: 'Month', year: 'Year', all: 'Since listing', min: 'Min', max: 'Max', why: 'Why?', updated: 'Last updated' };
   const contexts = contextsFor(state, lang);
   return `<article><div class="card-head"><h2>${s.symbol.replace('USDT', '/USDT')}</h2><b><bdi id="${s.symbol}-price">${money(s.currentPrice)}</bdi></b></div>
     <span class="badge ${a.signal}">${signalLabels[lang][a.signal]}</span>
     <p class="decision"><b>${escapeHtml(decisionGuidance(state, lang))}</b></p>
-    <div class="metrics"><span>${labels.confidence} <b>${a.confidence}%</b></span><span>${labels.risk} <b>${riskLabels[lang][a.riskLevel]}</b></span></div>
+    <div class="metrics"><span>${labels.decisionScore} <b>${a.decisionScore}/100</b></span><span>${labels.confidence} <b>${a.confidence}%</b></span><span>${labels.risk} <b>${riskLabels[lang][a.riskLevel]}</b></span></div>
     <div class="technical-metrics"><span>${labels.timeframe} <b>${escapeHtml(a.analysisTimeframe || '—')}</b></span><span>${labels.currentPrice} <bdi id="${s.symbol}-technical-price">${money(s.currentPrice)}</bdi></span><span>EMA20 <bdi>${money(a.ema20)}</bdi></span><span>EMA50 <bdi>${money(a.ema50)}</bdi></span></div>
     <div class="ranges"><span>${labels.day}: ${labels.min} <bdi id="${s.symbol}-day-low">${money(s.dayLow)}</bdi> · ${labels.max} <bdi id="${s.symbol}-day-high">${money(s.dayHigh)}</bdi></span><span>${labels.week}: ${labels.min} <bdi>${money(s.weekLow)}</bdi> · ${labels.max} <bdi>${money(s.weekHigh)}</bdi></span><span>${labels.month}: ${labels.min} <bdi>${money(s.monthLow)}</bdi> · ${labels.max} <bdi>${money(s.monthHigh)}</bdi></span><span>${labels.year}: ${labels.min} <bdi>${money(s.yearLow)}</bdi> · ${labels.max} <bdi>${money(s.yearHigh)}</bdi></span><span>${labels.all}: ${labels.min} <bdi>${money(s.allTimeLow)}</bdi> · ${labels.max} <bdi>${money(s.allTimeHigh)}</bdi></span></div>
     <small>${labels.updated}: ${updated(s.lastUpdatedUtc, lang)}</small>
     <button data-reasons="${id}">${labels.why}</button><div id="${id}" hidden><ul>${reasonsFor(a, lang).map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul><p>${escapeHtml(contexts[0])}</p>
+    ${compactBreakdown(a, lang)}${compactDirections(a, lang)}
     <h3>${lang === 'ar' ? 'ماذا وجد فحص الأخبار؟' : 'What did the news scan find?'}</h3><p>${newsSentimentLabel(state.news?.score ?? 0, lang)} (${state.news?.score ?? 0})</p>${newsItems(state, lang)}</div>
     <small class="score-legend">${scoreLegend(lang)}</small></article>`;
 }
@@ -79,6 +80,16 @@ function updateLiveCard(symbol: SymbolCode, snapshot: SymbolState['snapshot']) {
 }
 function updated(value: string, lang: Language) { const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat(lang === 'ar' ? 'ar-EG' : 'en-US', { dateStyle: 'short', timeStyle: 'medium' }).format(date); }
 function escapeHtml(value: string) { const span = document.createElement('span'); span.textContent = value; return span.innerHTML; }
+function compactBreakdown(analysis: SymbolState['analysis'], lang: Language) {
+  const b = analysis.scoreBreakdown;
+  const title = lang === 'ar' ? 'تفصيل الدرجة' : 'Score breakdown';
+  return `<h3>${title}</h3><p>Technical ${b.technicalScore} · News ${b.newsScore} · Macro ${b.macroScore} · Historical ${b.historicalScore} · Risk ${b.riskScore}</p>`;
+}
+function compactDirections(analysis: SymbolState['analysis'], lang: Language) {
+  if (!analysis.expectedDirections.length) return '';
+  const title = lang === 'ar' ? 'الاتجاه المتوقع' : 'Expected direction';
+  return `<h3>${title}</h3><ul>${analysis.expectedDirections.map(x => `<li>${escapeHtml(x.window)}: ${x.bullishPercent}% ${lang === 'ar' ? 'صعود' : 'bullish'} / ${x.bearishPercent}% ${lang === 'ar' ? 'هبوط' : 'bearish'}</li>`).join('')}</ul>`;
+}
 function newsItems(state: SymbolState, lang: Language) {
   const items = state.news?.items ?? [];
   if (!items.length) return `<p>${lang === 'ar' ? 'لم يجد مزود RSS أخبارًا حديثة مطابقة.' : 'The configured RSS feed found no recent matching headlines.'}</p>`;

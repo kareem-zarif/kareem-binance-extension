@@ -33,7 +33,17 @@ public sealed record TechnicalIndicatorDto(
     string Timeframe,
     decimal Ema20,
     decimal Ema50,
+    decimal? Ema100,
     decimal? Ema200,
+    decimal MacdLine,
+    decimal MacdSignal,
+    decimal MacdHistogram,
+    decimal Adx14,
+    decimal BollingerUpper,
+    decimal BollingerMiddle,
+    decimal BollingerLower,
+    decimal Vwap,
+    decimal Obv,
     decimal Atr14,
     decimal VolumeRatio,
     string Trend,
@@ -45,9 +55,23 @@ public enum DecisionSignal { MARKET_NOW, LIMIT_ONLY, WAIT, AVOID, TAKE_PROFIT_WA
 public enum RiskLevel { LOW, MEDIUM, HIGH }
 public enum SuggestedOrderType { MARKET, LIMIT, NO_ACTION }
 
+public sealed record DecisionScoreBreakdownDto(
+    int TechnicalScore,
+    int NewsScore,
+    int MacroScore,
+    int HistoricalScore,
+    int RiskScore);
+
+public sealed record ExpectedDirectionDto(
+    string Window,
+    int BullishPercent,
+    int BearishPercent,
+    string RationaleArabic);
+
 public sealed record SignalDto(
     string Symbol,
     DecisionSignal Signal,
+    int DecisionScore,
     int Confidence,
     RiskLevel RiskLevel,
     SuggestedOrderType SuggestedOrderType,
@@ -61,7 +85,10 @@ public sealed record SignalDto(
     string PriceContextArabic,
     string NewsContextArabic,
     string TechnicalContextArabic,
-    string? BtcVsEthComparisonArabic);
+    string? BtcVsEthComparisonArabic,
+    DecisionScoreBreakdownDto ScoreBreakdown,
+    IReadOnlyList<ExpectedDirectionDto> ExpectedDirections,
+    string ProbabilityDisclaimerArabic);
 
 public sealed record ComparisonDto(
     string BetterForBeginnerNow,
