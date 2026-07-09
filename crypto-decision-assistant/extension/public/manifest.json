@@ -6,6 +6,11 @@
   "permissions": ["storage", "notifications", "alarms", "tabs", "offscreen"],
   "host_permissions": [
     "http://localhost:5187/*",
+    "https://data-api.binance.vision/*",
+    "https://api.binance.com/*",
+    "https://api-gcp.binance.com/*",
+    "https://api1.binance.com/*",
+    "https://api2.binance.com/*",
     "https://www.binance.com/en/trade/BTC_USDT*",
     "https://www.binance.com/en/trade/ETH_USDT*"
   ],

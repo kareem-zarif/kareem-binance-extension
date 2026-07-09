@@ -2,6 +2,9 @@ import { incompleteWarningArabic, incompleteWarningEnglish, type Settings, type 
 
 export type Language = Settings['language'];
 
+export const fallbackSourceNoteArabic = 'المصدر الاحتياطي: بيانات Binance العامة المباشرة لأن الخادم المحلي غير متاح، والتحليل مبسط ولا يشمل الأخبار.';
+export const fallbackSourceNoteEnglish = 'Fallback source: live public Binance data because the local backend is unavailable; this analysis is simplified and excludes news.';
+
 const reasonMap: Array<[string, string]> = [
   ['قريب من قاع', 'Price is near a weekly or monthly low without RSI collapse.'],
   ['RSI على الساعة', 'Hourly RSI is in a reasonable pullback-monitoring zone.'],
@@ -12,6 +15,7 @@ const reasonMap: Array<[string, string]> = [
 ];
 const warningMap: Array<[string, string]> = [
   [incompleteWarningArabic, incompleteWarningEnglish],
+  [fallbackSourceNoteArabic, fallbackSourceNoteEnglish],
   ['الدخول ماركت مخاطرة', 'Market entry carries more risk than a limit order. This is educational assistance, not guaranteed financial advice.'],
   ['قريب جدًا من أعلى السنة', 'Price is very close to the yearly high; chasing it is high risk.'],
   ['قريب من قمة', 'Price is close to a weekly or monthly high.'],

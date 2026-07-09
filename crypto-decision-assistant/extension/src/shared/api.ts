@@ -1,4 +1,5 @@
-import { incompleteWarningArabic, type AnalysisTimeframe, type Comparison, type MarketSnapshot, type NewsSentiment, type Signal, type SignalResult, type SymbolCode } from './types';
+import { getPublicComparison, getPublicSymbolState } from './publicMarket';
+import { incompleteWarningArabic, type AnalysisTimeframe, type Comparison, type MarketSnapshot, type NewsSentiment, type Signal, type SignalResult, type SymbolCode, type SymbolState } from './types';
 
 async function get<T>(baseUrl: string, path: string): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`);
@@ -6,7 +7,7 @@ async function get<T>(baseUrl: string, path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function getSymbolState(baseUrl: string, symbol: SymbolCode, holdsAsset = false, timeframe: AnalysisTimeframe = '4H') {
+async function getBackendSymbolState(baseUrl: string, symbol: SymbolCode, holdsAsset: boolean, timeframe: AnalysisTimeframe): Promise<SymbolState> {
   const [snapshotRaw, analysisRaw, newsRaw] = await Promise.all([
     get<Record<string, unknown>>(baseUrl, `/api/market/snapshot?symbol=${symbol}`),
     get<Record<string, unknown>>(baseUrl, `/api/analysis/signal?symbol=${symbol}&holdsAsset=${holdsAsset}&timeframe=${timeframe}`),
@@ -15,8 +16,25 @@ export async function getSymbolState(baseUrl: string, symbol: SymbolCode, holdsA
   return { snapshot: normalizeSnapshot(snapshotRaw, symbol), analysis: normalizeAnalysis(analysisRaw, symbol), news: normalizeNews(newsRaw, symbol) };
 }
 
-export const getComparison = (baseUrl: string, timeframe: AnalysisTimeframe = '4H') =>
-  get<Comparison>(baseUrl, `/api/analysis/compare?timeframe=${timeframe}`);
+// Try the configured backend first; if it is unreachable, fall back to live
+// public Binance data so the panel keeps working instead of failing outright.
+export async function getSymbolState(baseUrl: string, symbol: SymbolCode, holdsAsset = false, timeframe: AnalysisTimeframe = '4H'): Promise<SymbolState> {
+  try {
+    return await getBackendSymbolState(baseUrl, symbol, holdsAsset, timeframe);
+  } catch (error) {
+    console.warn(`Backend unreachable for ${symbol}; using public market fallback.`, error);
+    return getPublicSymbolState(symbol, holdsAsset, timeframe);
+  }
+}
+
+export async function getComparison(baseUrl: string, timeframe: AnalysisTimeframe = '4H'): Promise<Comparison> {
+  try {
+    return await get<Comparison>(baseUrl, `/api/analysis/compare?timeframe=${timeframe}`);
+  } catch (error) {
+    console.warn('Backend unreachable for comparison; using public market fallback.', error);
+    return getPublicComparison(timeframe);
+  }
+}
 
 const pick = (raw: Record<string, unknown>, camel: string, pascal: string) => raw[camel] ?? raw[pascal];
 const number = (value: unknown, fallback = 0) => {
