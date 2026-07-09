@@ -29,7 +29,7 @@ async function load() {
   $<HTMLInputElement>('soundEnabled').checked = config.soundEnabled;
   $<HTMLInputElement>('soundOnlyForStrongSignals').checked = config.soundOnlyForStrongSignals;
   syncSoundTestButton();
-  $<HTMLInputElement>('notificationConfidence').value = String(config.notificationConfidence);
+  $<HTMLInputElement>('priceMoveAlertPercent').value = String(config.priceMoveAlertPercent);
   renderAlerts();
 }
 
@@ -46,8 +46,11 @@ chrome.storage.onChanged.addListener((changes, area) => {
   renderAlerts();
 });
 
+// Text/number fields debounce while typing; discrete controls (dropdowns,
+// checkboxes) fire `change` and are persisted immediately so a selection like
+// the analysis timeframe takes effect without waiting on the debounce.
 $<HTMLFormElement>('form').addEventListener('input', () => scheduleAutoSave());
-$<HTMLFormElement>('form').addEventListener('change', () => scheduleAutoSave());
+$<HTMLFormElement>('form').addEventListener('change', () => void flushAutoSave());
 
 $<HTMLButtonElement>('addAlert').addEventListener('click', async () => {
   const price = Number($<HTMLInputElement>('alertPrice').value);
@@ -84,13 +87,18 @@ function readFormSettings(): Settings | undefined {
     riskMode: $<HTMLSelectElement>('riskMode').value as Settings['riskMode'],
     soundEnabled: $<HTMLInputElement>('soundEnabled').checked,
     soundOnlyForStrongSignals: $<HTMLInputElement>('soundOnlyForStrongSignals').checked,
-    notificationConfidence: Number($<HTMLInputElement>('notificationConfidence').value),
+    priceMoveAlertPercent: Math.max(0, Number($<HTMLInputElement>('priceMoveAlertPercent').value) || 0),
     language: $<HTMLSelectElement>('language').value as Settings['language'] };
 }
 
 function scheduleAutoSave() {
   if (autoSaveTimer) clearTimeout(autoSaveTimer);
   autoSaveTimer = setTimeout(() => void saveSettings(config.language === 'ar' ? 'تم الحفظ تلقائيًا.' : 'Auto-saved.'), 450);
+}
+
+function flushAutoSave() {
+  if (autoSaveTimer) { clearTimeout(autoSaveTimer); autoSaveTimer = undefined; }
+  return saveSettings(config.language === 'ar' ? 'تم الحفظ تلقائيًا.' : 'Auto-saved.');
 }
 
 async function saveSettings(message: string) {

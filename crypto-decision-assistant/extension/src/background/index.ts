@@ -4,6 +4,7 @@ import { defaultSettings, normalizeAnalysisTimeframe, normalizeRefreshSeconds, s
 
 const STATE_KEY = 'marketState';
 const SETTINGS_KEY = 'settings';
+const ANCHOR_KEY = 'priceMoveAnchors';
 let hub: signalR.HubConnection | undefined;
 let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 const nestedRoot = import.meta.url.includes('/crypto-decision-assistant/extension/dist/');
@@ -20,6 +21,7 @@ async function settings(): Promise<Settings> {
     refreshSeconds: normalizeRefreshSeconds(refreshSeconds), heldSymbols: stored?.heldSymbols ?? [],
     analysisTimeframe: normalizeAnalysisTimeframe(stored?.analysisTimeframe),
     soundOnlyForStrongSignals: legacySoundSettings ? false : stored?.soundOnlyForStrongSignals ?? false,
+    priceMoveAlertPercent: Math.max(0, Number(stored?.priceMoveAlertPercent) || 0),
     priceAlerts: activePriceAlerts };
   if ((stored?.priceAlerts?.length ?? 0) !== activePriceAlerts.length)
     await chrome.storage.local.set({ [SETTINGS_KEY]: config });
@@ -35,12 +37,15 @@ function scheduleRefresh(config: Settings) {
   chrome.alarms.create('refresh-market', { periodInMinutes: Math.max(0.5, config.refreshSeconds / 60) });
 }
 
-async function notify(id: string, title: string, message: string, strong: boolean) {
+async function notify(id: string, title: string, message: string, strong: boolean, sound = false) {
   const config = await settings();
   const notificationId = await chrome.notifications.create(id, {
     type: 'basic', iconUrl: chrome.runtime.getURL(assetPath('icon.png')), title, message, priority: strong ? 2 : 0
   });
-  if (config.soundEnabled && (!config.soundOnlyForStrongSignals || strong)) await playNotificationSound();
+  // Sound is best-effort: a failed offscreen playback must never break alert
+  // handling (e.g. removing a triggered price alert) or the refresh chain.
+  if (sound && config.soundEnabled && (!config.soundOnlyForStrongSignals || strong))
+    await playNotificationSound().catch(error => console.warn('Notification sound failed.', error));
   return notificationId;
 }
 
@@ -68,24 +73,36 @@ function effectiveThreshold(config: Settings) {
     (config.riskMode === 'Conservative' ? 10 : config.riskMode === 'Aggressive' ? -10 : 0)));
 }
 
+async function safely(run: () => Promise<unknown>) {
+  try { await run(); } catch (error) { console.warn('Notification step failed.', error); }
+}
+
 async function refreshAll() {
   const config = await settings();
   const previous = ((await chrome.storage.local.get(STATE_KEY))[STATE_KEY] ?? {}) as Partial<Record<SymbolCode, SymbolState>>;
+  const anchors = ((await chrome.storage.local.get(ANCHOR_KEY))[ANCHOR_KEY] ?? {}) as Partial<Record<SymbolCode, number>>;
   const next = { ...previous };
+  const nextAnchors: Partial<Record<SymbolCode, number>> = { ...anchors };
   await Promise.all(config.symbols.map(async symbol => {
     try {
       const state = await getSymbolState(config.apiBaseUrl, symbol, config.heldSymbols.includes(symbol), config.analysisTimeframe);
       next[symbol] = state;
+      // Each notification runs in isolation: a failure in one (e.g. a signal or
+      // range notification) must never skip the user's custom price alerts.
       const oldSignal = previous[symbol]?.analysis.signal;
-      if (oldSignal && oldSignal !== state.analysis.signal) await signalNotification(symbol, oldSignal, state.analysis.signal, state.analysis.decisionScore, config);
-      await rangeNotifications(state, previous[symbol], config);
-      await customPriceAlerts(state, config);
+      if (oldSignal && oldSignal !== state.analysis.signal)
+        await safely(() => signalNotification(symbol, oldSignal, state.analysis.signal, state.analysis.decisionScore, config));
+      await safely(() => rangeNotifications(state, previous[symbol], config));
+      await safely(() => priceMoveNotification(state, config, anchors[symbol], value => { nextAnchors[symbol] = value; }));
+      await safely(() => customPriceAlerts(state, config));
     } catch (error) {
       console.warn(`Refresh failed for ${symbol}`, error);
     }
   }));
-  await chrome.storage.local.set({ [STATE_KEY]: next });
+  await chrome.storage.local.set({ [STATE_KEY]: next, [ANCHOR_KEY]: nextAnchors });
   await broadcast({ type: 'STATE_UPDATE', state: next });
+  // Also reach the popup (broadcast only targets Binance tabs); ignored if closed.
+  await chrome.runtime.sendMessage({ type: 'STATE_UPDATE', state: next }).catch(() => undefined);
 }
 
 async function signalNotification(symbol: SymbolCode, oldSignal: Signal, current: Signal, confidence: number, config: Settings) {
@@ -110,6 +127,25 @@ async function rangeNotifications(current: SymbolState, previous: SymbolState | 
   }
 }
 
+async function priceMoveNotification(state: SymbolState, config: Settings, anchor: number | undefined, setAnchor: (value: number) => void) {
+  const price = state.snapshot.currentPrice;
+  if (!(price > 0)) return;
+  const threshold = config.priceMoveAlertPercent;
+  if (!(threshold > 0) || anchor === undefined || !(anchor > 0)) { setAnchor(price); return; }
+  const movePercent = (price - anchor) / anchor * 100;
+  if (Math.abs(movePercent) < threshold) return;
+  const up = movePercent >= 0;
+  const symbol = state.snapshot.symbol;
+  const priceText = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(price);
+  await notify(`move-${symbol}-${Date.now()}`,
+    config.language === 'ar' ? `${symbol}: تحرك السعر` : `${symbol}: Price move`,
+    config.language === 'ar'
+      ? `${up ? 'ارتفع' : 'انخفض'} السعر ${Math.abs(movePercent).toFixed(2)}% إلى ${priceText}.`
+      : `Price ${up ? 'rose' : 'fell'} ${Math.abs(movePercent).toFixed(2)}% to ${priceText}.`,
+    true, true);
+  setAnchor(price);
+}
+
 async function customPriceAlerts(state: SymbolState, config: Settings) {
   let changed = false;
   for (const alert of config.priceAlerts.filter(x => x.symbol === state.snapshot.symbol && !x.triggered)) {
@@ -117,7 +153,7 @@ async function customPriceAlerts(state: SymbolState, config: Settings) {
     const hit = alert.condition === 'above' ? price >= alert.price : price <= alert.price;
     if (!hit) continue;
     const currentPrice = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(state.snapshot.currentPrice);
-    await notify(`price-${alert.id}`, config.language === 'ar' ? `${alert.symbol}: وصل السعر` : `${alert.symbol}: Price alert`, config.language === 'ar' ? `السعر ${currentPrice} حقق التنبيه.` : `Price ${currentPrice} reached your configured level.`, true);
+    await notify(`price-${alert.id}`, config.language === 'ar' ? `${alert.symbol}: وصل السعر` : `${alert.symbol}: Price alert`, config.language === 'ar' ? `السعر ${currentPrice} حقق التنبيه.` : `Price ${currentPrice} reached your configured level.`, true, true);
     config.priceAlerts = config.priceAlerts.filter(x => x.id !== alert.id);
     changed = true;
   }
@@ -141,7 +177,7 @@ async function connectHub() {
   });
   hub.on('signalChanged', refreshAll);
   hub.on('alertTriggered', (alert: { symbol: string; price: number }) =>
-    notify(`backend-alert-${alert.symbol}`, `${alert.symbol}: تنبيه سعر`, `وصل السعر إلى ${alert.price}.`, true));
+    notify(`backend-alert-${alert.symbol}`, `${alert.symbol}: تنبيه سعر`, `وصل السعر إلى ${alert.price}.`, true, true));
   try {
     await hub.start();
     for (const symbol of config.symbols) await hub.invoke('Subscribe', symbol);
@@ -156,7 +192,10 @@ chrome.runtime.onInstalled.addListener(async () => {
   await connectHub();
 });
 chrome.runtime.onStartup.addListener(() => { void refreshAll(); void connectHub(); });
-chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === 'refresh-market') void refreshAll(); });
+// Await inside the alarm listener so the MV3 service worker stays alive until
+// the refresh (and any notification it fires) completes; a bare `void` lets
+// Chrome suspend the worker mid-fetch, which silently drops price alerts.
+chrome.alarms.onAlarm.addListener(async alarm => { if (alarm.name === 'refresh-market') await refreshAll(); });
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes[SETTINGS_KEY]) {
     void settings().then(scheduleRefresh);
@@ -176,13 +215,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'ORDER_FILLED_VISIBLE') {
     settings().then(config => notify(`filled-${message.symbol}-${Date.now()}`,
       config.language === 'ar' ? `${message.symbol}: حالة Filled ظاهرة` : `${message.symbol}: Filled status visible`,
-      config.language === 'ar' ? 'تعرض Binance أن الطلب Filled. راجع تفاصيل الطلب للتأكد.' : 'Binance visibly reports the order as Filled. Review the order details to confirm.', true))
+      config.language === 'ar' ? 'تعرض Binance أن الطلب Filled. راجع تفاصيل الطلب للتأكد.' : 'Binance visibly reports the order as Filled. Review the order details to confirm.', true, true))
       .then(() => sendResponse({ ok: true })); return true;
   }
   if (message.type === 'TEST_NOTIFICATION') {
     settings().then(config => notify(`test-${Date.now()}`,
       config.language === 'ar' ? 'اختبار الإشعارات' : 'Notification test',
-      config.language === 'ar' ? 'تم اختبار الإشعار والصوت.' : 'Notification and sound test completed.', true))
+      config.language === 'ar' ? 'تم اختبار الإشعار والصوت.' : 'Notification and sound test completed.', true, true))
       .then(notificationId => sendResponse({ ok: true, notificationId }))
       .catch(error => sendResponse({ ok: false, error: String(error) })); return true;
   }

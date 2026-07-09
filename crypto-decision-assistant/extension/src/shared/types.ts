@@ -49,7 +49,7 @@ export interface Settings {
   apiBaseUrl: string; symbols: SymbolCode[]; refreshSeconds: number; heldSymbols: SymbolCode[];
   analysisTimeframe: AnalysisTimeframe;
   riskMode: 'Conservative' | 'Balanced' | 'Aggressive'; soundEnabled: boolean;
-  soundOnlyForStrongSignals: boolean; notificationConfidence: number; priceAlerts: PriceAlert[];
+  soundOnlyForStrongSignals: boolean; notificationConfidence: number; priceMoveAlertPercent: number; priceAlerts: PriceAlert[];
   language: 'en' | 'ar';
 }
 
@@ -65,7 +65,7 @@ export const defaultSettings: Settings = {
   apiBaseUrl: 'http://localhost:5187', symbols: ['BTCUSDT', 'ETHUSDT'], refreshSeconds: 15, heldSymbols: [],
   analysisTimeframe: '4H',
   riskMode: 'Balanced', soundEnabled: true, soundOnlyForStrongSignals: false,
-  notificationConfidence: 70, priceAlerts: [], language: 'en'
+  notificationConfidence: 70, priceMoveAlertPercent: 0, priceAlerts: [], language: 'en'
 };
 
 export const signalLabels: Record<'en' | 'ar', Record<Signal, string>> = {
